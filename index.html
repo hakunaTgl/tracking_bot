@@ -26,13 +26,13 @@
       const [editingBot, setEditingBot] = useState(null);
       const [code, setCode] = useState("");
       const [logs, setLogs] = useState([]);
-      const [aiChat, setAiChat] = useState([]);
+      const [aiChat, setAiChat] = useState([{ user: "", ai: "I’m the Unified AI, your hub’s brain. Build bots, check status, or chat!" }]);
       const [file, setFile] = useState(null);
       const [codeAnalysis, setCodeAnalysis] = useState(null);
       const [suggestions, setSuggestions] = useState(["Crypto Tracker Bot"]);
       const [addFunctionOption, setAddFunctionOption] = useState("");
 
-      // Initialize IndexedDB
+      // Initialize IndexedDB and Unified AI
       useEffect(() => {
         const initDB = async () => {
           const db = await idb.openDB('bot-hub', 1, {
@@ -46,12 +46,13 @@
           const savedBots = await db.getAll('bots');
           setLogs(savedLogs.map(log => log.message));
           setBots(savedBots);
-          // Proactive AI check
-          savedBots.forEach(bot => {
-            if (bot.status === "Idle") {
-              setAiChat(c => [...c, { user: "", ai: `Bot ${bot.name} is idle. Deploy it?` }]);
+          // Unified AI proactive check
+          if (savedBots.length > 0) {
+            const idleBots = savedBots.filter(b => b.status === "Idle").map(b => b.name).join(", ");
+            if (idleBots) {
+              setAiChat(c => [...c, { user: "", ai: `Idle bots: ${idleBots}. Deploy them?` }]);
             }
-          });
+          }
         };
         initDB();
       }, []);
@@ -72,7 +73,7 @@
       const saveInput = async (input) => {
         const db = await idb.openDB('bot-hub', 1);
         await db.add('inputs', { input, timestamp: new Date().toISOString() });
-        // Suggest hub enhancement based on inputs
+        // Unified AI suggests hub enhancements
         if (input.includes("weather") && !suggestions.includes("Weather Dashboard")) {
           setSuggestions([...suggestions, "Weather Dashboard"]);
           setAiChat(c => [...c, { user: "", ai: "Frequent weather bots detected. Add a weather dashboard?" }]);
@@ -86,7 +87,7 @@
         saveLog("Logs cleared");
       };
 
-      // Smarter AI with Intent Detection
+      // Unified AI Logic
       const askAiQuestion = (prompt) => {
         let response;
         const lowerPrompt = prompt.toLowerCase();
@@ -95,7 +96,7 @@
           const runningBots = bots.filter(b => b.status === "Running").map(b => b.name).join(", ");
           response = lowerPrompt.includes("running")
             ? `Running bots: ${runningBots || "None"}`
-            : `Hub status: ${bots.length} bots, ${logs.length} logs. Ask for details!`;
+            : `Hub status: ${bots.length} bots, ${logs.length} logs. Want details?`;
         }
         // Bot-building
         else if (lowerPrompt.includes("build") || lowerPrompt.includes("create") || lowerPrompt.includes("bot")) {
@@ -111,10 +112,10 @@
         }
         // General conversation
         else {
-          response = `Got it! You said: "${prompt}". Want to talk hub, bots, or something else?`;
+          response = `Cool, you said: "${prompt}". Wanna talk bots, hub, or just vibe?`;
         }
         setAiChat([...aiChat, { user: prompt, ai: response }]);
-        saveLog(`AI: ${response}`);
+        saveLog(`Unified AI: ${response}`);
         if (lowerPrompt.includes("bot")) saveInput(prompt);
       };
 
@@ -212,10 +213,10 @@ def save_data(data, format='json'):
 
       const suggestEdits = () => {
         const suggestion = code.includes("requests") 
-          ? "Add retry logic with exponential backoff for API calls?"
+          ? "Add retry logic with exponential backoff?"
           : "Add input validation to main function?";
         setAiChat([...aiChat, { user: "Suggest edits", ai: suggestion }]);
-        saveLog(`AI suggested: ${suggestion}`);
+        saveLog(`Unified AI suggested: ${suggestion}`);
       };
 
       const addFunction = () => {
@@ -263,7 +264,7 @@ def send_email(subject, body, recipient):
           ? "Change to hourly updates or add multiple cities?"
           : "Specify data format or update frequency?";
         setAiChat([...aiChat, { user: "Refine details", ai: suggestion }]);
-        saveLog(`AI suggested: ${suggestion}`);
+        saveLog(`Unified AI suggested: ${suggestion}`);
       };
 
       const copyCode = () => {
@@ -303,7 +304,7 @@ def send_email(subject, body, recipient):
       const debugBot = (botId) => {
         const bot = bots.find(b => b.id === botId);
         const debugResult = bot.code.includes("requests") 
-          ? "Checked: requests imported, ensure API key is set"
+          ? "Checked: requests imported, ensure API key"
           : "Checked: No syntax errors, verify logic";
         saveLog(`Debugging Bot ${botId}: ${debugResult}`);
       };
@@ -323,9 +324,9 @@ def send_email(subject, body, recipient):
         <div className="p-4 max-w-full mx-auto bg-gray-100 min-h-screen flex flex-col text-base">
           <h1 className="text-2xl font-bold mb-4 text-blue-800 text-center">Smart Bot Hub</h1>
 
-          {/* AI Chat */}
+          {/* Unified AI */}
           <div className="mb-4 bg-white p-4 rounded shadow">
-            <h2 className="text-lg font-semibold mb-2">AI Assistant</h2>
+            <h2 className="text-lg font-semibold mb-2">Unified AI</h2>
             <div className="h-48 overflow-y-auto border p-2 text-base mb-2">
               {aiChat.map((chat, index) => (
                 <div key={index} className="mb-2">
@@ -338,12 +339,12 @@ def send_email(subject, body, recipient):
               type="text" 
               value={codePrompt} 
               onChange={(e) => setCodePrompt(e.target.value)} 
-              placeholder="Build a bot or ask about the hub"
+              placeholder="Build a bot, check status, or chat"
               className="border p-3 w-full mb-2 text-base rounded"
               onKeyPress={(e) => e.key === 'Enter' && askAiQuestion(codePrompt)}
             />
             <button 
-              onClick={() => setAiChat([])}
+              onClick={() => setAiChat([{ user: "", ai: "Unified AI reset. Build, check, or chat?" }])}
               className="w-full bg-red-500 text-white py-3 rounded"
             >
               Reset Chat
@@ -509,106 +510,106 @@ def send_email(subject, body, recipient):
                 <button 
                   onClick={createBot}
                   className="flex-1 bg-green-500 text-white py-3 rounded text-base"
-                >
-                  Create Bot
-                </button>
+                  >
+                    Create Bot
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Edit Code */}
-          {editingBot && (
+            {/* Edit Code */}
+            {editingBot && (
+              <div className="mb-4 bg-white p-4 rounded shadow">
+                <h2 className="text-lg font-semibold mb-2">Edit: {editingBot.name}</h2>
+                <textarea
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  className="w-full h-48 border p-2 font-mono text-base rounded"
+                  placeholder="Edit code"
+                />
+                <div className="mt-2 flex gap-2">
+                  <button 
+                    onClick={saveCode}
+                    className="flex-1 bg-green-500 text-white py-3 rounded text-base"
+                  >
+                    Save
+                  </button>
+                  <button 
+                    onClick={() => setEditingBot(null)}
+                    className="flex-1 bg-red-500 text-white py-3 rounded text-base"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Suggested Bots */}
             <div className="mb-4 bg-white p-4 rounded shadow">
-              <h2 className="text-lg font-semibold mb-2">Edit: {editingBot.name}</h2>
-              <textarea
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                className="w-full h-48 border p-2 font-mono text-base rounded"
-                placeholder="Edit code"
-              />
-              <div className="mt-2 flex gap-2">
-                <button 
-                  onClick={saveCode}
-                  className="flex-1 bg-green-500 text-white py-3 rounded text-base"
-                >
-                  Save
-                </button>
-                <button 
-                  onClick={() => setEditingBot(null)}
-                  className="flex-1 bg-red-500 text-white py-3 rounded text-base"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Suggested Bots */}
-          <div className="mb-4 bg-white p-4 rounded shadow">
-            <h2 className="text-lg font-semibold mb-2">Suggested Bots</h2>
-            {suggestions.map((suggestion, index) => (
-              <div key={index} className="flex justify-between items-center mb-2">
-                <span className="text-base">{suggestion}</span>
-                <button 
-                  onClick={() => createSuggestedBot(suggestion)}
-                  className="bg-blue-500 text-white px-3 py-2 rounded text-base"
-                >
-                  Create
-                </button>
-              </div>
-            ))}
-          </div>
-
-          {/* Logs */}
-          <div className="mb-4 bg-white p-4 rounded shadow">
-            <h2 className="text-lg font-semibold mb-2">Logs</h2>
-            <div className="h-48 overflow-y-auto border p-2 text-base">
-              {logs.map((log, index) => (
-                <p key={index}>{log}</p>
+              <h2 className="text-lg font-semibold mb-2">Suggested Bots</h2>
+              {suggestions.map((suggestion, index) => (
+                <div key={index} className="flex justify-between items-center mb-2">
+                  <span className="text-base">{suggestion}</span>
+                  <button 
+                    onClick={() => createSuggestedBot(suggestion)}
+                    className="bg-blue-500 text-white px-3 py-2 rounded text-base"
+                  >
+                    Create
+                  </button>
+                </div>
               ))}
             </div>
-            <button 
-              onClick={clearLogs}
-              className="w-full bg-red-500 text-white py-3 rounded mt-2"
-            >
-              Clear Logs
-            </button>
-          </div>
 
-          {/* Bottom Nav */}
-          <div className="fixed bottom-0 left-0 right-0 bg-white p-3 flex justify-around shadow">
-            <button 
-              onClick={() => window.scrollTo(0, 0)}
-              className="text-blue-800 font-semibold text-base"
-            >
-              AI
-            </button>
-            <button 
-              onClick={() => document.querySelector('table').scrollIntoView()}
-              className="text-blue-800 font-semibold text-base"
-            >
-              Bots
-            </button>
-            <button 
-              onClick={() => document.querySelector('.h-48').scrollIntoView()}
-              className="text-blue-800 font-semibold text-base"
-            >
-              Logs
-            </button>
+            {/* Logs */}
+            <div className="mb-4 bg-white p-4 rounded shadow">
+              <h2 className="text-lg font-semibold mb-2">Logs</h2>
+              <div className="h-48 overflow-y-auto border p-2 text-base">
+                {logs.map((log, index) => (
+                  <p key={index}>{log}</p>
+                ))}
+              </div>
+              <button 
+                onClick={clearLogs}
+                className="w-full bg-red-500 text-white py-3 rounded mt-2"
+              >
+                Clear Logs
+              </button>
+            </div>
+
+            {/* Bottom Nav */}
+            <div className="fixed bottom-0 left-0 right-0 bg-white p-3 flex justify-around shadow">
+              <button 
+                onClick={() => window.scrollTo(0, 0)}
+                className="text-blue-800 font-semibold text-base"
+              >
+                AI
+              </button>
+              <button 
+                onClick={() => document.querySelector('table').scrollIntoView()}
+                className="text-blue-800 font-semibold text-base"
+              >
+                Bots
+              </button>
+              <button 
+                onClick={() => document.querySelector('.h-48').scrollIntoView()}
+                className="text-blue-800 font-semibold text-base"
+              >
+                Logs
+              </button>
+            </div>
           </div>
-        </div>
-      );
-    };
-    ReactDOM.render(<BotHub />, document.getElementById('root'));
-  </script>
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/service-worker.js')
-          .then(reg => console.log('Service Worker registered'))
-          .catch(err => console.log('Service Worker registration failed:', err));
-      });
-    }
-  </script>
-</body>
+        );
+      };
+      ReactDOM.render(<BotHub />, document.getElementById('root'));
+    </script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/service-worker.js')
+            .then(reg => console.log('Service Worker registered'))
+            .catch(err => console.log('Service Worker registration failed:', err));
+        });
+      }
+    </script>
+  </body>
 </html>
