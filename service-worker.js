@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bot-hub-v3';
+const CACHE_NAME = 'bot-hub-v4';
 const urlsToCache = [
   '/',
   '/index.html',
