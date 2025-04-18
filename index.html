@@ -7,6 +7,7 @@
   <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.development.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.development.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.20.6/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/idb@7.0.1/build/iife/index-min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#1E40AF">
@@ -15,12 +16,10 @@
 <body>
   <div id="root"></div>
   <script type="text/babel">
-    const { useState } = React;
+    const { useState, useEffect } = React;
+
     const BotHub = () => {
-      const [bots, setBots] = useState([
-        { id: 1, name: "Data Scraper", status: "Idle", performance: 85 },
-        { id: 2, name: "Report Generator", status: "Idle", performance: 90 },
-      ]);
+      const [bots, setBots] = useState([]);
       const [command, setCommand] = useState("");
       const [codePrompt, setCodePrompt] = useState("");
       const [editingBot, setEditingBot] = useState(null);
@@ -29,29 +28,75 @@
       const [aiChat, setAiChat] = useState([]);
       const [file, setFile] = useState(null);
       const [codeAnalysis, setCodeAnalysis] = useState(null);
-      const [suggestions, setSuggestions] = useState(["Portfolio Analyzer Bot"]);
+      const [suggestions, setSuggestions] = useState(["Crypto Tracker Bot"]);
 
+      // Initialize IndexedDB
+      useEffect(() => {
+        const initDB = async () => {
+          const db = await idb.openDB('bot-hub', 1, {
+            upgrade(db) {
+              db.createObjectStore('logs', { keyPath: 'id', autoIncrement: true });
+              db.createObjectStore('bots', { keyPath: 'id' });
+            }
+          });
+          const savedLogs = await db.getAll('logs');
+          const savedBots = await db.getAll('bots');
+          setLogs(savedLogs.map(log => log.message));
+          setBots(savedBots);
+        };
+        initDB();
+      }, []);
+
+      // Save to IndexedDB
+      const saveLog = async (message) => {
+        const db = await idb.openDB('bot-hub', 1);
+        await db.add('logs', { message, timestamp: new Date().toISOString() });
+        setLogs([...logs, message]);
+      };
+
+      const saveBot = async (bot) => {
+        const db = await idb.openDB('bot-hub', 1);
+        await db.put('bots', bot);
+        setBots([...bots.filter(b => b.id !== bot.id), bot]);
+      };
+
+      const clearLogs = async () => {
+        const db = await idb.openDB('bot-hub', 1);
+        await db.clear('logs');
+        setLogs([]);
+        saveLog("Logs cleared");
+      };
+
+      // Smarter AI Logic
       const askAiQuestion = (prompt) => {
-        const response = prompt.includes("web scraper") 
-          ? "Do you want the scraper to save data as JSON or CSV?"
-          : "Can you specify the bot's main function?";
+        let response;
+        if (prompt.includes("web scraper")) {
+          response = "Which website? JSON or CSV output?";
+        } else if (prompt.includes("stock") || prompt.includes("weather")) {
+          response = prompt.includes("stock") 
+            ? "Which stocks or exchanges? Real-time or daily data?"
+            : "Which city? Daily or hourly updates?";
+        } else {
+          response = "Can you clarify the bot's main purpose or data source?";
+        }
         setAiChat([...aiChat, { user: prompt, ai: response }]);
-        setLogs([...logs, `AI asked: ${response}`]);
+        saveLog(`AI asked: ${response}`);
       };
 
       const handleFileUpload = (e) => {
         const uploadedFile = e.target.files[0];
         setFile(uploadedFile);
-        setLogs([...logs, `File uploaded: ${uploadedFile.name}`]);
+        saveLog(`File uploaded: ${uploadedFile.name}`);
         askAiQuestion(`Uploaded file: ${uploadedFile.name}`);
       };
 
       const sendCommand = (botId) => {
         if (!command) return;
-        setLogs([...logs, `Command "${command}" sent to Bot ${botId}`]);
+        saveLog(`Command "${command}" sent to Bot ${botId}`);
         setBots(bots.map(bot => 
           bot.id === botId ? { ...bot, status: "Running" } : bot
         ));
+        saveBot({ ...bots.find(bot => bot.id === botId), status: "Running" });
         setCommand("");
       };
 
@@ -59,71 +104,94 @@
         if (!codePrompt && !file) return;
         const input = codePrompt || (file ? file.name : "");
         askAiQuestion(input);
-        const generatedCode = `# Generated code for: ${input}\ndef run():\n  print("Simulated bot execution")\n  # Add logic here`;
+        const generatedCode = input.includes("weather") 
+          ? `import requests\ndef fetch_weather(city):\n  url = "https://api.weatherapi.com/v1/current.json?key=YOUR_KEY&q={city}"\n  response = requests.get(url)\n  return response.json()`
+          : `# Generated code for: ${input}\ndef run():\n  print("Simulated bot execution")\n  # Add logic here`;
         const analysis = {
           name: input.split(" ")[0] + " Bot",
-          functions: ["run()"],
-          value: "Automates task, saves time",
-          risk: "May fail if external APIs are down"
+          functions: generatedCode.includes("fetch_weather") ? ["fetch_weather()"] : ["run()"],
+          value: `Automates ${input}, saves ~2 hours/week`,
+          risk: "API downtime or rate limits may cause failures"
         };
         setCode(generatedCode);
         setCodeAnalysis(analysis);
-        setLogs([...logs, `Code generated for: "${input}"`]);
+        saveLog(`Code generated for: "${input}"`);
         setCodePrompt("");
         setFile(null);
       };
 
       const suggestEdits = () => {
-        setAiChat([...aiChat, { user: "Suggest edits", ai: "Add error handling to API calls?" }]);
-        setLogs([...logs, "AI suggested: Add error handling"]);
+        const suggestion = code.includes("requests") 
+          ? "Add retry logic for API failures?"
+          : "Add error handling to main function?";
+        setAiChat([...aiChat, { user: "Suggest edits", ai: suggestion }]);
+        saveLog(`AI suggested: ${suggestion}`);
       };
 
       const addFunction = () => {
-        setAiChat([...aiChat, { user: "Add function", ai: "Add a logging function?" }]);
-        setLogs([...logs, "AI suggested: Add logging function"]);
+        const suggestion = code.includes("weather") 
+          ? "Add send_email() to notify updates?"
+          : "Add logging function?";
+        setAiChat([...aiChat, { user: "Add function", ai: suggestion }]);
+        saveLog(`AI suggested: ${suggestion}`);
+      };
+
+      const removeFunction = () => {
+        setAiChat([...aiChat, { user: "Remove function", ai: "Remove run() or keep core functions?" }]);
+        saveLog("AI suggested: Remove function");
+      };
+
+      const refineDetails = () => {
+        setAiChat([...aiChat, { user: "Refine details", ai: "Specify update frequency or data format?" }]);
+        saveLog("AI suggested: Refine details");
       };
 
       const copyCode = () => {
         navigator.clipboard.writeText(code);
-        setLogs([...logs, "Code copied to clipboard"]);
+        saveLog("Code copied to clipboard");
       };
 
       const createBot = () => {
         const newBot = {
           id: bots.length + 1,
           name: codeAnalysis.name,
+          code,
+          analysis: codeAnalysis,
           status: "Deployed",
           performance: 80
         };
-        setBots([...bots, newBot]);
-        setLogs([...logs, `Bot created: ${newBot.name}`]);
+        saveBot(newBot);
+        saveLog(`Bot created: ${newBot.name}`);
         setCode("");
         setCodeAnalysis(null);
+        setSuggestions([...suggestions, `${newBot.name} Enhanced`]);
       };
 
       const startEditing = (bot) => {
         setEditingBot(bot);
-        setCode(`# Code for ${bot.name}\ndef run():\n  print("Bot is running")`);
+        setCode(bot.code || `# Code for ${bot.name}\ndef run():\n  print("Bot is running")`);
       };
 
       const saveCode = () => {
-        setLogs([...logs, `Code saved for ${editingBot.name}`]);
-        setBots(bots.map(bot => 
-          bot.id === editingBot.id ? { ...bot, status: "Updated" } : bot
-        ));
+        saveLog(`Code saved for ${editingBot.name}`);
+        const updatedBot = { ...editingBot, code, status: "Updated" };
+        saveBot(updatedBot);
         setEditingBot(null);
         setCode("");
       };
 
       const debugBot = (botId) => {
-        setLogs([...logs, `Debugging Bot ${botId}: No errors found`]);
+        const bot = bots.find(b => b.id === botId);
+        const debugResult = bot.code.includes("requests") 
+          ? "Checked imports: requests found, API key needed"
+          : "No syntax errors found";
+        saveLog(`Debugging Bot ${botId}: ${debugResult}`);
       };
 
       const deployBot = (botId) => {
-        setLogs([...logs, `Bot ${botId} deployed`]);
-        setBots(bots.map(bot => 
-          bot.id === botId ? { ...bot, status: "Deployed" } : bot
-        ));
+        saveLog(`Bot ${botId} deployed`);
+        const updatedBot = { ...bots.find(bot => bot.id === botId), status: "Deployed" };
+        saveBot(updatedBot);
       };
 
       const createSuggestedBot = (suggestion) => {
@@ -138,9 +206,9 @@
           {/* AI Chat */}
           <div className="mb-4 bg-white p-3 rounded shadow">
             <h2 className="text-base font-semibold mb-2">AI Assistant</h2>
-            <div className="h-32 overflow-y-auto border p-2 text-xs mb-2">
+            <div className="h-40 overflow-y-auto border p-2 text-sm mb-2">
               {aiChat.map((chat, index) => (
-                <div key={index}>
+                <div key={index} className="mb-2">
                   <p><strong>You:</strong> {chat.user}</p>
                   <p><strong>AI:</strong> {chat.ai}</p>
                 </div>
@@ -154,6 +222,12 @@
               className="border p-2 w-full mb-2 text-sm rounded"
               onKeyPress={(e) => e.key === 'Enter' && askAiQuestion(codePrompt)}
             />
+            <button 
+              onClick={() => setAiChat([])}
+              className="w-full bg-red-500 text-white py-2 rounded"
+            >
+              Reset Chat
+            </button>
           </div>
 
           {/* File Upload */}
@@ -163,7 +237,7 @@
               type="file" 
               accept=".txt,.pdf" 
               onChange={handleFileUpload}
-              className="w-full mb-2 text-xs"
+              className="w-full mb-2 text-sm"
             />
             <button 
               onClick={generateCode}
@@ -189,45 +263,44 @@
           <div className="mb-4 bg-white p-3 rounded shadow">
             <h2 className="text-base font-semibold mb-2">Bots</h2>
             <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-xs">
+              <table className="w-full border-collapse text-sm">
                 <thead>
                   <tr className="bg-gray-200">
-                    <th className="border p-1">Name</th>
-                    <th className="border p-1">Status</th>
-                    <th className="border p-1">Perf</th>
-                    <th className="border p-1">Actions</th>
+                    <th className="border p-2">Name</th>
+                    <th className="border p-2">Status</th>
+                    <th className="border p-2">Perf</th>
+                    <th className="border p-2">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {bots.map(bot => (
                     <tr key={bot.id}>
-                      <td className="border p-1">{bot.name}</td>
-                      <td className="border p-1">{bot.name}</td>
-                      <td className="border p-1">{bot.status}</td>
-                      <td className="border p-1">{bot.performance}%</td>
-                      <td className="border p-1">
+                      <td className="border p-2">{bot.name}</td>
+                      <td className="border p-2">{bot.status}</td>
+                      <td className="border p-2">{bot.performance}%</td>
+                      <td className="border p-2">
                         <div className="flex flex-col space-y-1">
                           <button 
                             onClick={() => sendCommand(bot.id)} 
-                            className="bg-blue-500 text-white px-1 py-0.5 rounded text-xs"
+                            className="bg-blue-500 text-white px-2 py-1 rounded text-sm"
                           >
                             Cmd
                           </button>
                           <button 
                             onClick={() => startEditing(bot)} 
-                            className="bg-yellow-500 text-white px-1 py-0.5 rounded text-xs"
+                            className="bg-yellow-500 text-white px-2 py-1 rounded text-sm"
                           >
                             Edit
                           </button>
                           <button 
                             onClick={() => debugBot(bot.id)} 
-                            className="bg-purple-500 text-white px-1 py-0.5 rounded text-xs"
+                            className="bg-purple-500 text-white px-2 py-1 rounded text-sm"
                           >
                             Dbg
                           </button>
                           <button 
                             onClick={() => deployBot(bot.id)} 
-                            className="bg-green-500 text-white px-1 py-0.5 rounded text-xs"
+                            className="bg-green-500 text-white px-2 py-1 rounded text-sm"
                           >
                             Dply
                           </button>
@@ -245,36 +318,48 @@
             <div className="mb-4 bg-white p-3 rounded shadow">
               <h2 className="text-base font-semibold mb-2">Generated Bot</h2>
               {codeAnalysis && (
-                <div className="text-xs mb-2">
+                <div className="text-sm mb-2">
                   <p><strong>Name:</strong> {codeAnalysis.name}</p>
                   <p><strong>Functions:</strong> {codeAnalysis.functions.join(", ")}</p>
                   <p><strong>Value:</strong> {codeAnalysis.value}</p>
                   <p><strong>Risk:</strong> {codeAnalysis.risk}</p>
                 </div>
               )}
-              <pre className="border p-2 bg-gray-50 text-xs">{code}</pre>
+              <pre className="border p-2 bg-gray-50 text-sm">{code}</pre>
               <div className="mt-2 flex flex-wrap gap-2">
                 <button 
                   onClick={suggestEdits}
-                  className="flex-1 bg-yellow-500 text-white py-1 rounded text-xs"
+                  className="flex-1 bg-yellow-500 text-white py-2 rounded text-sm"
                 >
                   Suggest Edits
                 </button>
                 <button 
                   onClick={addFunction}
-                  className="flex-1 bg-blue-500 text-white py-1 rounded text-xs"
+                  className="flex-1 bg-blue-500 text-white py-2 rounded text-sm"
                 >
                   Add Function
                 </button>
                 <button 
+                  onClick={removeFunction}
+                  className="flex-1 bg-red-500 text-white py-2 rounded text-sm"
+                >
+                  Remove Function
+                </button>
+                <button 
+                  onClick={refineDetails}
+                  className="flex-1 bg-purple-500 text-white py-2 rounded text-sm"
+                >
+                  Refine Details
+                </button>
+                <button 
                   onClick={copyCode}
-                  className="flex-1 bg-gray-500 text-white py-1 rounded text-xs"
+                  className="flex-1 bg-gray-500 text-white py-2 rounded text-sm"
                 >
                   Copy Code
                 </button>
                 <button 
                   onClick={createBot}
-                  className="flex-1 bg-green-500 text-white py-1 rounded text-xs"
+                  className="flex-1 bg-green-500 text-white py-2 rounded text-sm"
                 >
                   Create Bot
                 </button>
@@ -287,10 +372,10 @@
             <h2 className="text-base font-semibold mb-2">Suggested Bots</h2>
             {suggestions.map((suggestion, index) => (
               <div key={index} className="flex justify-between items-center mb-2">
-                <span className="text-xs">{suggestion}</span>
+                <span className="text-sm">{suggestion}</span>
                 <button 
                   onClick={() => createSuggestedBot(suggestion)}
-                  className="bg-blue-500 text-white px-2 py-1 rounded text-xs"
+                  className="bg-blue-500 text-white px-2 py-1 rounded text-sm"
                 >
                   Create
                 </button>
@@ -299,13 +384,41 @@
           </div>
 
           {/* Logs */}
-          <div className="bg-white p-3 rounded shadow">
+          <div className="mb-4 bg-white p-3 rounded shadow">
             <h2 className="text-base font-semibold mb-2">Logs</h2>
-            <div className="h-32 overflow-y-auto border p-2 text-xs">
+            <div className="h-40 overflow-y-auto border p-2 text-sm">
               {logs.map((log, index) => (
                 <p key={index}>{log}</p>
               ))}
             </div>
+            <button 
+              onClick={clearLogs}
+              className="w-full bg-red-500 text-white py-2 rounded mt-2"
+            >
+              Clear Logs
+            </button>
+          </div>
+
+          {/* Bottom Nav */}
+          <div className="fixed bottom-0 left-0 right-0 bg-white p-2 flex justify-around shadow">
+            <button 
+              onClick={() => window.scrollTo(0, 0)}
+              className="text-blue-800 font-semibold"
+            >
+              AI
+            </button>
+            <button 
+              onClick={() => document.querySelector('table').scrollIntoView()}
+              className="text-blue-800 font-semibold"
+            >
+              Bots
+            </button>
+            <button 
+              onClick={() => document.querySelector('.h-40').scrollIntoView()}
+              className="text-blue-800 font-semibold"
+            >
+              Logs
+            </button>
           </div>
         </div>
       );
