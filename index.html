@@ -21,6 +21,7 @@
     const BotHub = () => {
       const [bots, setBots] = useState([]);
       const [command, setCommand] = useState("");
+      const [globalCommand, setGlobalCommand] = useState("");
       const [codePrompt, setCodePrompt] = useState("");
       const [editingBot, setEditingBot] = useState(null);
       const [code, setCode] = useState("");
@@ -29,6 +30,7 @@
       const [file, setFile] = useState(null);
       const [codeAnalysis, setCodeAnalysis] = useState(null);
       const [suggestions, setSuggestions] = useState(["Crypto Tracker Bot"]);
+      const [addFunctionOption, setAddFunctionOption] = useState("");
 
       // Initialize IndexedDB
       useEffect(() => {
@@ -37,12 +39,19 @@
             upgrade(db) {
               db.createObjectStore('logs', { keyPath: 'id', autoIncrement: true });
               db.createObjectStore('bots', { keyPath: 'id' });
+              db.createObjectStore('inputs', { keyPath: 'id', autoIncrement: true });
             }
           });
           const savedLogs = await db.getAll('logs');
           const savedBots = await db.getAll('bots');
           setLogs(savedLogs.map(log => log.message));
           setBots(savedBots);
+          // Proactive AI check
+          savedBots.forEach(bot => {
+            if (bot.status === "Idle") {
+              setAiChat(c => [...c, { user: "", ai: `Bot ${bot.name} is idle. Deploy it?` }]);
+            }
+          });
         };
         initDB();
       }, []);
@@ -60,6 +69,16 @@
         setBots([...bots.filter(b => b.id !== bot.id), bot]);
       };
 
+      const saveInput = async (input) => {
+        const db = await idb.openDB('bot-hub', 1);
+        await db.add('inputs', { input, timestamp: new Date().toISOString() });
+        // Suggest hub enhancement based on inputs
+        if (input.includes("weather") && !suggestions.includes("Weather Dashboard")) {
+          setSuggestions([...suggestions, "Weather Dashboard"]);
+          setAiChat(c => [...c, { user: "", ai: "Frequent weather bots detected. Add a weather dashboard?" }]);
+        }
+      };
+
       const clearLogs = async () => {
         const db = await idb.openDB('bot-hub', 1);
         await db.clear('logs');
@@ -67,20 +86,36 @@
         saveLog("Logs cleared");
       };
 
-      // Smarter AI Logic
+      // Smarter AI with Intent Detection
       const askAiQuestion = (prompt) => {
         let response;
-        if (prompt.includes("web scraper")) {
-          response = "Which website? JSON or CSV output?";
-        } else if (prompt.includes("stock") || prompt.includes("weather")) {
-          response = prompt.includes("stock") 
-            ? "Which stocks or exchanges? Real-time or daily data?"
-            : "Which city? Daily or hourly updates?";
-        } else {
-          response = "Can you clarify the bot's main purpose or data source?";
+        const lowerPrompt = prompt.toLowerCase();
+        // Hub queries
+        if (lowerPrompt.includes("hub") || lowerPrompt.includes("status") || lowerPrompt.includes("bots")) {
+          const runningBots = bots.filter(b => b.status === "Running").map(b => b.name).join(", ");
+          response = lowerPrompt.includes("running")
+            ? `Running bots: ${runningBots || "None"}`
+            : `Hub status: ${bots.length} bots, ${logs.length} logs. Ask for details!`;
+        }
+        // Bot-building
+        else if (lowerPrompt.includes("build") || lowerPrompt.includes("create") || lowerPrompt.includes("bot")) {
+          if (lowerPrompt.includes("web scraper")) {
+            response = "Target website? Save as JSON, CSV, or database?";
+          } else if (lowerPrompt.includes("weather")) {
+            response = "City or ZIP code? Daily or hourly updates? Email alerts?";
+          } else if (lowerPrompt.includes("stock")) {
+            response = "Which stocks or exchanges? Real-time or daily? Notifications?";
+          } else {
+            response = "What’s the bot’s main goal? Data source or output format?";
+          }
+        }
+        // General conversation
+        else {
+          response = `Got it! You said: "${prompt}". Want to talk hub, bots, or something else?`;
         }
         setAiChat([...aiChat, { user: prompt, ai: response }]);
-        saveLog(`AI asked: ${response}`);
+        saveLog(`AI: ${response}`);
+        if (lowerPrompt.includes("bot")) saveInput(prompt);
       };
 
       const handleFileUpload = (e) => {
@@ -90,28 +125,83 @@
         askAiQuestion(`Uploaded file: ${uploadedFile.name}`);
       };
 
-      const sendCommand = (botId) => {
-        if (!command) return;
-        saveLog(`Command "${command}" sent to Bot ${botId}`);
-        setBots(bots.map(bot => 
-          bot.id === botId ? { ...bot, status: "Running" } : bot
-        ));
-        saveBot({ ...bots.find(bot => bot.id === botId), status: "Running" });
-        setCommand("");
+      const sendCommand = (botId, cmd) => {
+        saveLog(`Command "${cmd}" sent to Bot ${botId}`);
+        const newStatus = cmd === "Start" ? "Running" : cmd === "Stop" ? "Idle" : "Restarting";
+        const updatedBot = { ...bots.find(bot => bot.id === botId), status: newStatus };
+        saveBot(updatedBot);
+      };
+
+      const sendGlobalCommand = () => {
+        if (!globalCommand) return;
+        saveLog(`Global command "${globalCommand}" sent to all bots`);
+        const newStatus = globalCommand === "Start All" ? "Running" : globalCommand === "Stop All" ? "Idle" : "Restarting";
+        const updatedBots = bots.map(bot => ({ ...bot, status: newStatus }));
+        updatedBots.forEach(saveBot);
+        setGlobalCommand("");
       };
 
       const generateCode = () => {
         if (!codePrompt && !file) return;
         const input = codePrompt || (file ? file.name : "");
         askAiQuestion(input);
-        const generatedCode = input.includes("weather") 
-          ? `import requests\ndef fetch_weather(city):\n  url = "https://api.weatherapi.com/v1/current.json?key=YOUR_KEY&q={city}"\n  response = requests.get(url)\n  return response.json()`
-          : `# Generated code for: ${input}\ndef run():\n  print("Simulated bot execution")\n  # Add logic here`;
+        let generatedCode, description;
+        if (input.toLowerCase().includes("weather")) {
+          generatedCode = `import requests
+# Fetches weather data for a city and sends email alerts
+def fetch_weather(city):
+    try:
+        url = f"https://api.weatherapi.com/v1/current.json?key=YOUR_KEY&q={city}"
+        response = requests.get(url)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            raise Exception("API request failed")
+    except Exception as e:
+        print(f"Error: {e}")
+        return None
+
+def send_email(data, recipient):
+    # Placeholder: Implement SMTP email sending
+    print(f"Sending weather data to {recipient}: {data}")
+`;
+          description = "Fetches current weather for a specified city using Weather API, handles errors, and sends data via email.";
+        } else if (input.toLowerCase().includes("scraper")) {
+          generatedCode = `import requests
+from bs4 import BeautifulSoup
+# Scrapes a website and extracts data
+def scrape_website(url):
+    try:
+        response = requests.get(url)
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, 'html.parser')
+            # Example: Extract all paragraph texts
+            data = [p.text for p in soup.find_all('p')]
+            return data
+        else:
+            raise Exception("Failed to fetch website")
+    except Exception as e:
+        print(f"Error: {e}")
+        return None
+
+def save_data(data, format='json'):
+    # Placeholder: Save data to file
+    print(f"Saving data in {format}: {data}")
+`;
+          description = "Scrapes a website for paragraph text using BeautifulSoup, handles errors, and saves data in JSON or CSV.";
+        } else {
+          generatedCode = `def run():
+    # Custom bot logic for: ${input}
+    print("Executing bot for: ${input}")
+`;
+          description = "Basic bot template for custom tasks.";
+        }
         const analysis = {
           name: input.split(" ")[0] + " Bot",
-          functions: generatedCode.includes("fetch_weather") ? ["fetch_weather()"] : ["run()"],
-          value: `Automates ${input}, saves ~2 hours/week`,
-          risk: "API downtime or rate limits may cause failures"
+          functions: generatedCode.match(/def [a-zA-Z_]+\(/g)?.map(f => f.replace("def ", "").replace("(", "()")) || ["run()"],
+          value: `Automates ${input}, saves ~2-4 hours/week`,
+          risk: "API downtime, rate limits, or parsing errors may occur",
+          description
         };
         setCode(generatedCode);
         setCodeAnalysis(analysis);
@@ -122,28 +212,58 @@
 
       const suggestEdits = () => {
         const suggestion = code.includes("requests") 
-          ? "Add retry logic for API failures?"
-          : "Add error handling to main function?";
+          ? "Add retry logic with exponential backoff for API calls?"
+          : "Add input validation to main function?";
         setAiChat([...aiChat, { user: "Suggest edits", ai: suggestion }]);
         saveLog(`AI suggested: ${suggestion}`);
       };
 
       const addFunction = () => {
-        const suggestion = code.includes("weather") 
-          ? "Add send_email() to notify updates?"
-          : "Add logging function?";
-        setAiChat([...aiChat, { user: "Add function", ai: suggestion }]);
-        saveLog(`AI suggested: ${suggestion}`);
+        if (!addFunctionOption) return;
+        let newCode = code;
+        if (addFunctionOption === "Logging") {
+          newCode += `
+def log_activity(message):
+    with open('bot.log', 'a') as f:
+        f.write(f"{message}\\n")
+    print(f"Logged: {message}")
+`;
+        } else if (addFunctionOption === "Email") {
+          newCode += `
+def send_email(subject, body, recipient):
+    # Placeholder: Implement SMTP email sending
+    print(f"Sending email to {recipient}: {subject}")
+`;
+        }
+        setCode(newCode);
+        setCodeAnalysis({
+          ...codeAnalysis,
+          functions: [...codeAnalysis.functions, addFunctionOption === "Logging" ? "log_activity()" : "send_email()"]
+        });
+        saveLog(`Added function: ${addFunctionOption}`);
+        setAddFunctionOption("");
       };
 
-      const removeFunction = () => {
-        setAiChat([...aiChat, { user: "Remove function", ai: "Remove run() or keep core functions?" }]);
-        saveLog("AI suggested: Remove function");
+      const removeFunction = (func) => {
+        const lines = code.split("\n");
+        const funcStart = lines.findIndex(line => line.includes(`def ${func.replace("()", "")}(`));
+        if (funcStart === -1) return;
+        const funcEnd = lines.slice(funcStart).findIndex(line => !line.startsWith(" ")) + funcStart;
+        const newCode = [...lines.slice(0, funcStart), ...lines.slice(funcEnd + 1)].join("\n");
+        setCode(newCode);
+        setCodeAnalysis({
+          ...codeAnalysis,
+          functions: codeAnalysis.functions.filter(f => f !== func)
+        });
+        saveLog(`Removed function: ${func}`);
       };
 
       const refineDetails = () => {
-        setAiChat([...aiChat, { user: "Refine details", ai: "Specify update frequency or data format?" }]);
-        saveLog("AI suggested: Refine details");
+        const suggestion = code.includes("weather") 
+          ? "Change to hourly updates or add multiple cities?"
+          : "Specify data format or update frequency?";
+        setAiChat([...aiChat, { user: "Refine details", ai: suggestion }]);
+        saveLog(`AI suggested: ${suggestion}`);
       };
 
       const copyCode = () => {
@@ -169,7 +289,7 @@
 
       const startEditing = (bot) => {
         setEditingBot(bot);
-        setCode(bot.code || `# Code for ${bot.name}\ndef run():\n  print("Bot is running")`);
+        setCode(bot.code);
       };
 
       const saveCode = () => {
@@ -183,8 +303,8 @@
       const debugBot = (botId) => {
         const bot = bots.find(b => b.id === botId);
         const debugResult = bot.code.includes("requests") 
-          ? "Checked imports: requests found, API key needed"
-          : "No syntax errors found";
+          ? "Checked: requests imported, ensure API key is set"
+          : "Checked: No syntax errors, verify logic";
         saveLog(`Debugging Bot ${botId}: ${debugResult}`);
       };
 
@@ -200,16 +320,16 @@
       };
 
       return (
-        <div className="p-4 max-w-full mx-auto bg-gray-100 min-h-screen flex flex-col text-sm">
-          <h1 className="text-xl font-bold mb-4 text-blue-800 text-center">Smart Bot Hub</h1>
+        <div className="p-4 max-w-full mx-auto bg-gray-100 min-h-screen flex flex-col text-base">
+          <h1 className="text-2xl font-bold mb-4 text-blue-800 text-center">Smart Bot Hub</h1>
 
           {/* AI Chat */}
-          <div className="mb-4 bg-white p-3 rounded shadow">
-            <h2 className="text-base font-semibold mb-2">AI Assistant</h2>
-            <div className="h-40 overflow-y-auto border p-2 text-sm mb-2">
+          <div className="mb-4 bg-white p-4 rounded shadow">
+            <h2 className="text-lg font-semibold mb-2">AI Assistant</h2>
+            <div className="h-48 overflow-y-auto border p-2 text-base mb-2">
               {aiChat.map((chat, index) => (
                 <div key={index} className="mb-2">
-                  <p><strong>You:</strong> {chat.user}</p>
+                  {chat.user && <p><strong>You:</strong> {chat.user}</p>}
                   <p><strong>AI:</strong> {chat.ai}</p>
                 </div>
               ))}
@@ -218,91 +338,103 @@
               type="text" 
               value={codePrompt} 
               onChange={(e) => setCodePrompt(e.target.value)} 
-              placeholder="Describe bot or ask AI"
-              className="border p-2 w-full mb-2 text-sm rounded"
+              placeholder="Build a bot or ask about the hub"
+              className="border p-3 w-full mb-2 text-base rounded"
               onKeyPress={(e) => e.key === 'Enter' && askAiQuestion(codePrompt)}
             />
             <button 
               onClick={() => setAiChat([])}
-              className="w-full bg-red-500 text-white py-2 rounded"
+              className="w-full bg-red-500 text-white py-3 rounded"
             >
               Reset Chat
             </button>
           </div>
 
           {/* File Upload */}
-          <div className="mb-4 bg-white p-3 rounded shadow">
-            <h2 className="text-base font-semibold mb-2">Upload Idea</h2>
+          <div className="mb-4 bg-white p-4 rounded shadow">
+            <h2 className="text-lg font-semibold mb-2">Upload Idea</h2>
             <input 
               type="file" 
               accept=".txt,.pdf" 
               onChange={handleFileUpload}
-              className="w-full mb-2 text-sm"
+              className="w-full mb-2 text-base"
             />
             <button 
               onClick={generateCode}
-              className="w-full bg-blue-500 text-white py-2 rounded"
+              className="w-full bg-blue-500 text-white py-3 rounded"
             >
               Generate from Input
             </button>
           </div>
 
-          {/* Command Setter */}
-          <div className="mb-4 bg-white p-3 rounded shadow">
-            <h2 className="text-base font-semibold mb-2">Send Command</h2>
-            <input 
-              type="text" 
-              value={command} 
-              onChange={(e) => setCommand(e.target.value)} 
-              placeholder="e.g., Start bot"
-              className="border p-2 w-full mb-2 text-sm rounded"
-            />
+          {/* Global Commands */}
+          <div className="mb-4 bg-white p-4 rounded shadow">
+            <h2 className="text-lg font-semibold mb-2">Global Commands</h2>
+            <select
+              value={globalCommand}
+              onChange={(e) => setGlobalCommand(e.target.value)}
+              className="border p-3 w-full mb-2 text-base rounded"
+            >
+              <option value="">Select Command</option>
+              <option value="Start All">Start All</option>
+              <option value="Stop All">Stop All</option>
+              <option value="Restart All">Restart All</option>
+            </select>
+            <button
+              onClick={sendGlobalCommand}
+              className="w-full bg-blue-500 text-white py-3 rounded"
+            >
+              Execute Global Command
+            </button>
           </div>
 
           {/* Bot Overseer */}
-          <div className="mb-4 bg-white p-3 rounded shadow">
-            <h2 className="text-base font-semibold mb-2">Bots</h2>
+          <div className="mb-4 bg-white p-4 rounded shadow">
+            <h2 className="text-lg font-semibold mb-2">Bots</h2>
             <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-sm">
+              <table className="w-full border-collapse text-base">
                 <thead>
                   <tr className="bg-gray-200">
-                    <th className="border p-2">Name</th>
-                    <th className="border p-2">Status</th>
-                    <th className="border p-2">Perf</th>
-                    <th className="border p-2">Actions</th>
+                    <th className="border p-3">Name</th>
+                    <th className="border p-3">Status</th>
+                    <th className="border p-3">Perf</th>
+                    <th className="border p-3">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {bots.map(bot => (
                     <tr key={bot.id}>
-                      <td className="border p-2">{bot.name}</td>
-                      <td className="border p-2">{bot.status}</td>
-                      <td className="border p-2">{bot.performance}%</td>
-                      <td className="border p-2">
-                        <div className="flex flex-col space-y-1">
-                          <button 
-                            onClick={() => sendCommand(bot.id)} 
-                            className="bg-blue-500 text-white px-2 py-1 rounded text-sm"
+                      <td className="border p-3">{bot.name}</td>
+                      <td className="border p-3">{bot.status}</td>
+                      <td className="border p-3">{bot.performance}%</td>
+                      <td className="border p-3">
+                        <div className="flex flex-col space-y-2">
+                          <select
+                            onChange={(e) => sendCommand(bot.id, e.target.value)}
+                            className="border p-2 text-base rounded"
                           >
-                            Cmd
-                          </button>
+                            <option value="">Command</option>
+                            <option value="Start">Start</option>
+                            <option value="Stop">Stop</option>
+                            <option value="Restart">Restart</option>
+                          </select>
                           <button 
                             onClick={() => startEditing(bot)} 
-                            className="bg-yellow-500 text-white px-2 py-1 rounded text-sm"
+                            className="bg-yellow-500 text-white px-3 py-2 rounded text-base"
                           >
                             Edit
                           </button>
                           <button 
                             onClick={() => debugBot(bot.id)} 
-                            className="bg-purple-500 text-white px-2 py-1 rounded text-sm"
+                            className="bg-purple-500 text-white px-3 py-2 rounded text-base"
                           >
-                            Dbg
+                            Debug
                           </button>
                           <button 
                             onClick={() => deployBot(bot.id)} 
-                            className="bg-green-500 text-white px-2 py-1 rounded text-sm"
+                            className="bg-green-500 text-white px-3 py-2 rounded text-base"
                           >
-                            Dply
+                            Deploy
                           </button>
                         </div>
                       </td>
@@ -315,51 +447,68 @@
 
           {/* Code and Analysis */}
           {code && (
-            <div className="mb-4 bg-white p-3 rounded shadow">
-              <h2 className="text-base font-semibold mb-2">Generated Bot</h2>
+            <div className="mb-4 bg-white p-4 rounded shadow">
+              <h2 className="text-lg font-semibold mb-2">Generated Bot</h2>
               {codeAnalysis && (
-                <div className="text-sm mb-2">
+                <div className="text-base mb-2">
                   <p><strong>Name:</strong> {codeAnalysis.name}</p>
+                  <p><strong>Description:</strong> {codeAnalysis.description}</p>
                   <p><strong>Functions:</strong> {codeAnalysis.functions.join(", ")}</p>
                   <p><strong>Value:</strong> {codeAnalysis.value}</p>
                   <p><strong>Risk:</strong> {codeAnalysis.risk}</p>
                 </div>
               )}
-              <pre className="border p-2 bg-gray-50 text-sm">{code}</pre>
+              <pre className="border p-2 bg-gray-50 text-base">{code}</pre>
               <div className="mt-2 flex flex-wrap gap-2">
                 <button 
                   onClick={suggestEdits}
-                  className="flex-1 bg-yellow-500 text-white py-2 rounded text-sm"
+                  className="flex-1 bg-yellow-500 text-white py-3 rounded text-base"
                 >
                   Suggest Edits
                 </button>
-                <button 
-                  onClick={addFunction}
-                  className="flex-1 bg-blue-500 text-white py-2 rounded text-sm"
-                >
-                  Add Function
-                </button>
-                <button 
-                  onClick={removeFunction}
-                  className="flex-1 bg-red-500 text-white py-2 rounded text-sm"
-                >
-                  Remove Function
-                </button>
+                <div className="flex-1">
+                  <select
+                    value={addFunctionOption}
+                    onChange={(e) => setAddFunctionOption(e.target.value)}
+                    className="border p-3 w-full mb-2 text-base rounded"
+                  >
+                    <option value="">Add Function</option>
+                    <option value="Logging">Logging</option>
+                    <option value="Email">Email Notification</option>
+                  </select>
+                  <button 
+                    onClick={addFunction}
+                    className="w-full bg-blue-500 text-white py-3 rounded text-base"
+                  >
+                    Add Selected
+                  </button>
+                </div>
+                <div className="flex-1">
+                  <select
+                    onChange={(e) => removeFunction(e.target.value)}
+                    className="border p-3 w-full mb-2 text-base rounded"
+                  >
+                    <option value="">Remove Function</option>
+                    {codeAnalysis?.functions.map(func => (
+                      <option key={func} value={func}>{func}</option>
+                    ))}
+                  </select>
+                </div>
                 <button 
                   onClick={refineDetails}
-                  className="flex-1 bg-purple-500 text-white py-2 rounded text-sm"
+                  className="flex-1 bg-purple-500 text-white py-3 rounded text-base"
                 >
                   Refine Details
                 </button>
                 <button 
                   onClick={copyCode}
-                  className="flex-1 bg-gray-500 text-white py-2 rounded text-sm"
+                  className="flex-1 bg-gray-500 text-white py-3 rounded text-base"
                 >
                   Copy Code
                 </button>
                 <button 
                   onClick={createBot}
-                  className="flex-1 bg-green-500 text-white py-2 rounded text-sm"
+                  className="flex-1 bg-green-500 text-white py-3 rounded text-base"
                 >
                   Create Bot
                 </button>
@@ -367,15 +516,42 @@
             </div>
           )}
 
+          {/* Edit Code */}
+          {editingBot && (
+            <div className="mb-4 bg-white p-4 rounded shadow">
+              <h2 className="text-lg font-semibold mb-2">Edit: {editingBot.name}</h2>
+              <textarea
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                className="w-full h-48 border p-2 font-mono text-base rounded"
+                placeholder="Edit code"
+              />
+              <div className="mt-2 flex gap-2">
+                <button 
+                  onClick={saveCode}
+                  className="flex-1 bg-green-500 text-white py-3 rounded text-base"
+                >
+                  Save
+                </button>
+                <button 
+                  onClick={() => setEditingBot(null)}
+                  className="flex-1 bg-red-500 text-white py-3 rounded text-base"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Suggested Bots */}
-          <div className="mb-4 bg-white p-3 rounded shadow">
-            <h2 className="text-base font-semibold mb-2">Suggested Bots</h2>
+          <div className="mb-4 bg-white p-4 rounded shadow">
+            <h2 className="text-lg font-semibold mb-2">Suggested Bots</h2>
             {suggestions.map((suggestion, index) => (
               <div key={index} className="flex justify-between items-center mb-2">
-                <span className="text-sm">{suggestion}</span>
+                <span className="text-base">{suggestion}</span>
                 <button 
                   onClick={() => createSuggestedBot(suggestion)}
-                  className="bg-blue-500 text-white px-2 py-1 rounded text-sm"
+                  className="bg-blue-500 text-white px-3 py-2 rounded text-base"
                 >
                   Create
                 </button>
@@ -384,38 +560,38 @@
           </div>
 
           {/* Logs */}
-          <div className="mb-4 bg-white p-3 rounded shadow">
-            <h2 className="text-base font-semibold mb-2">Logs</h2>
-            <div className="h-40 overflow-y-auto border p-2 text-sm">
+          <div className="mb-4 bg-white p-4 rounded shadow">
+            <h2 className="text-lg font-semibold mb-2">Logs</h2>
+            <div className="h-48 overflow-y-auto border p-2 text-base">
               {logs.map((log, index) => (
                 <p key={index}>{log}</p>
               ))}
             </div>
             <button 
               onClick={clearLogs}
-              className="w-full bg-red-500 text-white py-2 rounded mt-2"
+              className="w-full bg-red-500 text-white py-3 rounded mt-2"
             >
               Clear Logs
             </button>
           </div>
 
           {/* Bottom Nav */}
-          <div className="fixed bottom-0 left-0 right-0 bg-white p-2 flex justify-around shadow">
+          <div className="fixed bottom-0 left-0 right-0 bg-white p-3 flex justify-around shadow">
             <button 
               onClick={() => window.scrollTo(0, 0)}
-              className="text-blue-800 font-semibold"
+              className="text-blue-800 font-semibold text-base"
             >
               AI
             </button>
             <button 
               onClick={() => document.querySelector('table').scrollIntoView()}
-              className="text-blue-800 font-semibold"
+              className="text-blue-800 font-semibold text-base"
             >
               Bots
             </button>
             <button 
-              onClick={() => document.querySelector('.h-40').scrollIntoView()}
-              className="text-blue-800 font-semibold"
+              onClick={() => document.querySelector('.h-48').scrollIntoView()}
+              className="text-blue-800 font-semibold text-base"
             >
               Logs
             </button>
