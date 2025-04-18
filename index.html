@@ -26,11 +26,26 @@
       const [editingBot, setEditingBot] = useState(null);
       const [code, setCode] = useState("");
       const [logs, setLogs] = useState([]);
-      const [voiceInput, setVoiceInput] = useState(false);
-      const toggleVoiceInput = () => {
-        setVoiceInput(!voiceInput);
-        setLogs([...logs, voiceInput ? "Voice input disabled" : "Voice input enabled"]);
+      const [aiChat, setAiChat] = useState([]);
+      const [file, setFile] = useState(null);
+      const [codeAnalysis, setCodeAnalysis] = useState(null);
+      const [suggestions, setSuggestions] = useState(["Portfolio Analyzer Bot"]);
+
+      const askAiQuestion = (prompt) => {
+        const response = prompt.includes("web scraper") 
+          ? "Do you want the scraper to save data as JSON or CSV?"
+          : "Can you specify the bot's main function?";
+        setAiChat([...aiChat, { user: prompt, ai: response }]);
+        setLogs([...logs, `AI asked: ${response}`]);
       };
+
+      const handleFileUpload = (e) => {
+        const uploadedFile = e.target.files[0];
+        setFile(uploadedFile);
+        setLogs([...logs, `File uploaded: ${uploadedFile.name}`]);
+        askAiQuestion(`Uploaded file: ${uploadedFile.name}`);
+      };
+
       const sendCommand = (botId) => {
         if (!command) return;
         setLogs([...logs, `Command "${command}" sent to Bot ${botId}`]);
@@ -39,17 +54,58 @@
         ));
         setCommand("");
       };
+
       const generateCode = () => {
-        if (!codePrompt) return;
-        const generatedCode = `# Generated code for: ${codePrompt}\ndef run():\n  print("Simulated bot execution")\n  # Add logic here`;
+        if (!codePrompt && !file) return;
+        const input = codePrompt || (file ? file.name : "");
+        askAiQuestion(input);
+        const generatedCode = `# Generated code for: ${input}\ndef run():\n  print("Simulated bot execution")\n  # Add logic here`;
+        const analysis = {
+          name: input.split(" ")[0] + " Bot",
+          functions: ["run()"],
+          value: "Automates task, saves time",
+          risk: "May fail if external APIs are down"
+        };
         setCode(generatedCode);
-        setLogs([...logs, `Code generated for: "${codePrompt}"`]);
+        setCodeAnalysis(analysis);
+        setLogs([...logs, `Code generated for: "${input}"`]);
         setCodePrompt("");
+        setFile(null);
       };
+
+      const suggestEdits = () => {
+        setAiChat([...aiChat, { user: "Suggest edits", ai: "Add error handling to API calls?" }]);
+        setLogs([...logs, "AI suggested: Add error handling"]);
+      };
+
+      const addFunction = () => {
+        setAiChat([...aiChat, { user: "Add function", ai: "Add a logging function?" }]);
+        setLogs([...logs, "AI suggested: Add logging function"]);
+      };
+
+      const copyCode = () => {
+        navigator.clipboard.writeText(code);
+        setLogs([...logs, "Code copied to clipboard"]);
+      };
+
+      const createBot = () => {
+        const newBot = {
+          id: bots.length + 1,
+          name: codeAnalysis.name,
+          status: "Deployed",
+          performance: 80
+        };
+        setBots([...bots, newBot]);
+        setLogs([...logs, `Bot created: ${newBot.name}`]);
+        setCode("");
+        setCodeAnalysis(null);
+      };
+
       const startEditing = (bot) => {
         setEditingBot(bot);
         setCode(`# Code for ${bot.name}\ndef run():\n  print("Bot is running")`);
       };
+
       const saveCode = () => {
         setLogs([...logs, `Code saved for ${editingBot.name}`]);
         setBots(bots.map(bot => 
@@ -58,42 +114,66 @@
         setEditingBot(null);
         setCode("");
       };
+
       const debugBot = (botId) => {
         setLogs([...logs, `Debugging Bot ${botId}: No errors found`]);
       };
+
       const deployBot = (botId) => {
         setLogs([...logs, `Bot ${botId} deployed`]);
         setBots(bots.map(bot => 
           bot.id === botId ? { ...bot, status: "Deployed" } : bot
         ));
       };
+
+      const createSuggestedBot = (suggestion) => {
+        setCodePrompt(suggestion);
+        generateCode();
+      };
+
       return (
         <div className="p-4 max-w-full mx-auto bg-gray-100 min-h-screen flex flex-col text-sm">
           <h1 className="text-xl font-bold mb-4 text-blue-800 text-center">Smart Bot Hub</h1>
-          <div className="mb-4">
-            <button 
-              onClick={toggleVoiceInput}
-              className={`w-full py-2 rounded ${voiceInput ? 'bg-red-500' : 'bg-green-500'} text-white`}
-            >
-              {voiceInput ? 'Disable Voice' : 'Enable Voice'}
-            </button>
-          </div>
+
+          {/* AI Chat */}
           <div className="mb-4 bg-white p-3 rounded shadow">
-            <h2 className="text-base font-semibold mb-2">Generate Code</h2>
+            <h2 className="text-base font-semibold mb-2">AI Assistant</h2>
+            <div className="h-32 overflow-y-auto border p-2 text-xs mb-2">
+              {aiChat.map((chat, index) => (
+                <div key={index}>
+                  <p><strong>You:</strong> {chat.user}</p>
+                  <p><strong>AI:</strong> {chat.ai}</p>
+                </div>
+              ))}
+            </div>
             <input 
               type="text" 
               value={codePrompt} 
               onChange={(e) => setCodePrompt(e.target.value)} 
-              placeholder="e.g., Create a web scraper"
+              placeholder="Describe bot or ask AI"
               className="border p-2 w-full mb-2 text-sm rounded"
+              onKeyPress={(e) => e.key === 'Enter' && askAiQuestion(codePrompt)}
+            />
+          </div>
+
+          {/* File Upload */}
+          <div className="mb-4 bg-white p-3 rounded shadow">
+            <h2 className="text-base font-semibold mb-2">Upload Idea</h2>
+            <input 
+              type="file" 
+              accept=".txt,.pdf" 
+              onChange={handleFileUpload}
+              className="w-full mb-2 text-xs"
             />
             <button 
               onClick={generateCode}
               className="w-full bg-blue-500 text-white py-2 rounded"
             >
-              Generate
+              Generate from Input
             </button>
           </div>
+
+          {/* Command Setter */}
           <div className="mb-4 bg-white p-3 rounded shadow">
             <h2 className="text-base font-semibold mb-2">Send Command</h2>
             <input 
@@ -104,6 +184,8 @@
               className="border p-2 w-full mb-2 text-sm rounded"
             />
           </div>
+
+          {/* Bot Overseer */}
           <div className="mb-4 bg-white p-3 rounded shadow">
             <h2 className="text-base font-semibold mb-2">Bots</h2>
             <div className="overflow-x-auto">
@@ -119,6 +201,7 @@
                 <tbody>
                   {bots.map(bot => (
                     <tr key={bot.id}>
+                      <td className="border p-1">{bot.name}</td>
                       <td className="border p-1">{bot.name}</td>
                       <td className="border p-1">{bot.status}</td>
                       <td className="border p-1">{bot.performance}%</td>
@@ -156,43 +239,66 @@
               </table>
             </div>
           </div>
-          {editingBot && (
+
+          {/* Code and Analysis */}
+          {code && (
             <div className="mb-4 bg-white p-3 rounded shadow">
-              <h2 className="text-base font-semibold mb-2">Edit: {editingBot.name}</h2>
-              <textarea
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                className="w-full h-32 border p-2 font-mono text-xs rounded"
-                placeholder="Edit code"
-              />
-              <div className="mt-2 flex space-x-2">
+              <h2 className="text-base font-semibold mb-2">Generated Bot</h2>
+              {codeAnalysis && (
+                <div className="text-xs mb-2">
+                  <p><strong>Name:</strong> {codeAnalysis.name}</p>
+                  <p><strong>Functions:</strong> {codeAnalysis.functions.join(", ")}</p>
+                  <p><strong>Value:</strong> {codeAnalysis.value}</p>
+                  <p><strong>Risk:</strong> {codeAnalysis.risk}</p>
+                </div>
+              )}
+              <pre className="border p-2 bg-gray-50 text-xs">{code}</pre>
+              <div className="mt-2 flex flex-wrap gap-2">
                 <button 
-                  onClick={saveCode}
-                  className="flex-1 bg-green-500 text-white py-1 rounded text-xs"
+                  onClick={suggestEdits}
+                  className="flex-1 bg-yellow-500 text-white py-1 rounded text-xs"
                 >
-                  Save
+                  Suggest Edits
                 </button>
                 <button 
-                  onClick={() => setEditingBot(null)}
-                  className="flex-1 bg-red-500 text-white py-1 rounded text-xs"
+                  onClick={addFunction}
+                  className="flex-1 bg-blue-500 text-white py-1 rounded text-xs"
                 >
-                  Cancel
+                  Add Function
+                </button>
+                <button 
+                  onClick={copyCode}
+                  className="flex-1 bg-gray-500 text-white py-1 rounded text-xs"
+                >
+                  Copy Code
+                </button>
+                <button 
+                  onClick={createBot}
+                  className="flex-1 bg-green-500 text-white py-1 rounded text-xs"
+                >
+                  Create Bot
                 </button>
               </div>
             </div>
           )}
-          {code && !editingBot && (
-            <div className="mb-4 bg-white p-3 rounded shadow">
-              <h2 className="text-base font-semibold mb-2">Code Preview</h2>
-              <pre className="border p-2 bg-gray-50 text-xs">{code}</pre>
-              <button 
-                onClick={() => setCode("")}
-                className="w-full bg-red-500 text-white py-1 rounded mt-2 text-xs"
-              >
-                Clear
-              </button>
-            </div>
-          )}
+
+          {/* Suggested Bots */}
+          <div className="mb-4 bg-white p-3 rounded shadow">
+            <h2 className="text-base font-semibold mb-2">Suggested Bots</h2>
+            {suggestions.map((suggestion, index) => (
+              <div key={index} className="flex justify-between items-center mb-2">
+                <span className="text-xs">{suggestion}</span>
+                <button 
+                  onClick={() => createSuggestedBot(suggestion)}
+                  className="bg-blue-500 text-white px-2 py-1 rounded text-xs"
+                >
+                  Create
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {/* Logs */}
           <div className="bg-white p-3 rounded shadow">
             <h2 className="text-base font-semibold mb-2">Logs</h2>
             <div className="h-32 overflow-y-auto border p-2 text-xs">
