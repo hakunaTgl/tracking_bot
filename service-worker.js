@@ -1,10 +1,11 @@
-const CACHE_NAME = 'bot-hub-v2';
+const CACHE_NAME = 'bot-hub-v3';
 const urlsToCache = [
   '/',
   '/index.html',
   'https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.development.js',
   'https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.development.js',
   'https://cdn.jsdelivr.net/npm/@babel/standalone@7.20.6/babel.min.js',
+  'https://cdn.jsdelivr.net/npm/idb@7.0.1/build/iife/index-min.js',
   'https://cdn.tailwindcss.com'
 ];
 self.addEventListener('install', event => {
