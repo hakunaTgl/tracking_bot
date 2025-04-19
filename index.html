@@ -6,38 +6,38 @@
     <meta name="theme-color" content="#6200ea">
     <title>Smart Bot Hub</title>
     <link rel="manifest" href="manifest.json">
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <style>
-        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f0f0f0; }
-        .container { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 8px; }
-        #login, #hub { display: none; }
-        #chatArea, #logs { margin-top: 20px; }
-        input, button { padding: 10px; margin: 5px; width: calc(100% - 30px); }
-        button { background: #6200ea; color: white; border: none; cursor: pointer; }
-        .log-entry { border-bottom: 1px solid #ddd; padding: 10px; }
-        .error { color: red; }
+        #chatArea { max-height: 300px; overflow-y: auto; }
+        .log-entry { border-bottom: 1px solid #e5e7eb; }
     </style>
 </head>
-<body>
-    <div class="container">
-        <div id="login">
-            <h2>Login to Smart Bot Hub</h2>
-            <input type="email" id="email" placeholder="Email">
-            <input type="password" id="password" placeholder="Password">
-            <button onclick="signIn()">Login</button>
-            <button onclick="signUp()">Sign Up</button>
-            <p class="error" id="error"></p>
+<body class="bg-gray-100">
+    <div class="max-w-md mx-auto bg-white p-6 rounded-lg shadow-md mt-4">
+        <div id="login" class="space-y-4">
+            <h2 class="text-2xl font-bold text-center">Smart Bot Hub Login</h2>
+            <input type="email" id="email" placeholder="Email" class="border rounded p-2 w-full">
+            <input type="password" id="password" placeholder="Password" class="border rounded p-2 w-full">
+            <button onclick="signIn()" class="bg-purple-600 text-white p-2 rounded w-full hover:bg-purple-700">Login</button>
+            <button onclick="signUp()" class="bg-gray-600 text-white p-2 rounded w-full hover:bg-gray-700">Sign Up</button>
+            <p class="text-red-500 text-center" id="error"></p>
         </div>
-        <div id="hub">
-            <h2>Smart Bot Hub</h2>
-            <p>Welcome, <span id="userEmail"></span>! <button onclick="signOut()">Logout</button></p>
-            <input type="text" id="userInput" placeholder="Ask the AI...">
-            <button onclick="sendMessage()">Send</button>
-            <div id="chatArea"></div>
-            <h3>Your Logs</h3>
-            <div id="logs"></div>
-            <div id="bossArea" style="display: none;">
-                <h3>Boss View: All Logs</h3>
-                <div id="allLogs"></div>
+        <div id="hub" class="space-y-4 hidden">
+            <h2 class="text-2xl font-bold text-center">Smart Bot Hub</h2>
+            <p>Welcome, <span id="userEmail" class="font-semibold"></span>! <button onclick="signOut()" class="text-purple-600 underline">Logout</button></p>
+            <div class="space-y-2">
+                <input type="text" id="userInput" placeholder="Ask the AI..." class="border rounded p-2 w-full">
+                <button onclick="sendMessage()" class="bg-purple-600 text-white p-2 rounded w-full hover:bg-purple-700">Send</button>
+            </div>
+            <div id="chatArea" class="p-4 bg-gray-50 rounded"></div>
+            <div class="space-y-2">
+                <h3 class="text-xl font-semibold">Your Logs</h3>
+                <input type="text" id="logSearch" placeholder="Search logs..." class="border rounded p-2 w-full" oninput="searchLogs()">
+                <div id="logs" class="space-y-2"></div>
+            </div>
+            <div id="bossArea" class="space-y-2 hidden">
+                <h3 class="text-xl font-semibold">Boss View: All Logs</h3>
+                <div id="allLogs" class="space-y-2"></div>
             </div>
         </div>
     </div>
@@ -67,14 +67,14 @@
         // Check user state
         auth.onAuthStateChanged(user => {
             if (user) {
-                document.getElementById('login').style.display = 'none';
-                document.getElementById('hub').style.display = 'block';
+                document.getElementById('login').classList.add('hidden');
+                document.getElementById('hub').classList.remove('hidden');
                 document.getElementById('userEmail').textContent = user.email;
                 loadLogs(user.uid);
                 checkBossAccess(user.email);
             } else {
-                document.getElementById('login').style.display = 'block';
-                document.getElementById('hub').style.display = 'none';
+                document.getElementById('login').classList.remove('hidden');
+                document.getElementById('hub').classList.add('hidden');
             }
         });
 
@@ -129,10 +129,12 @@
 
         // Check if user is "boss"
         function checkBossAccess(email) {
-            const bossEmails = ['boss@example.com'];
+            const bossEmails = ['boss@example.com']; // Update with real boss emails
             if (bossEmails.includes(email)) {
-                document.getElementById('bossArea').style.display = 'block';
+                document.getElementById('bossArea').classList.remove('hidden');
                 loadAllLogs();
+            } else {
+                document.getElementById('bossArea').classList.add('hidden');
             }
         }
 
@@ -140,38 +142,43 @@
         let conversationHistory = [];
         async function getAIResponse(input) {
             if (conversationHistory.includes(input)) {
-                return `I see you asked "${input}" before! How about a deeper take: ${simulateAIResponse(input, true)}`;
+                return `Yo, you asked "${input}" again? Here's a fresh spin: ${simulateAIResponse(input, true)}`;
             }
             conversationHistory.push(input);
             return simulateAIResponse(input, false);
         }
 
-        // Simulate AI response (replace with actual AI API if available)
+        // Simulate AI response (Grok-like personality)
         function simulateAIResponse(input, isFollowUp) {
             const responses = [
-                `Cool question! Here's my take on "${input}": It's like ${input} but with more vibe!`,
-                `Yo, "${input}"? That’s wild! Think of it as a puzzle—here’s one piece.`,
-                `Hmm, "${input}" makes me think... Imagine it as a spicy taco of ideas!`
+                `Alright, "${input}"? That’s a vibe! Imagine it’s like ${input} cranked to 11 with extra sauce.`,
+                `Whoa, "${input}" hits hard! It’s like solving a puzzle in a sci-fi flick—here’s my take.`,
+                `Yo, "${input}"? Picture it as a cosmic taco stuffed with ideas. Let’s unpack it!`
             ];
             const followUps = [
-                `Diving deeper into "${input}", it’s like a whole new layer of awesome!`,
-                `Another angle on "${input}": Picture it with a twist of chaos!`
+                `Back for more on "${input}"? It’s like diving into a sequel with extra plot twists!`,
+                `Round two for "${input}"? Let’s remix it with some next-level chaos!`
             ];
             return isFollowUp ? followUps[Math.floor(Math.random() * followUps.length)] : responses[Math.floor(Math.random() * responses.length)];
         }
 
         // Send message to AI
         async function sendMessage() {
-            const input = document.getElementById('userInput').value;
-            if (!input) return;
+            const input = document.getElementById('userInput').value.trim();
+            if (!input) {
+                showMessage('Type something to chat with the AI!');
+                return;
+            }
             const user = auth.currentUser;
-            if (!user) return;
+            if (!user) {
+                showMessage('Please log in to chat.');
+                return;
+            }
 
             const chatArea = document.getElementById('chatArea');
-            chatArea.innerHTML += `<p><b>You:</b> ${input}</p>`;
-
+            chatArea.innerHTML += `<p class="text-gray-800"><b>You:</b> ${input}</p>`;
             const response = await getAIResponse(input);
-            chatArea.innerHTML += `<p><b>AI:</b> ${response}</p>`;
+            chatArea.innerHTML += `<p class="text-purple-600"><b>AI:</b> ${response}</p>`;
             chatArea.scrollTop = chatArea.scrollHeight;
 
             await db.collection('logs').add({
@@ -187,21 +194,40 @@
         }
 
         // Load user logs
+        let allUserLogs = [];
         async function loadLogs(userId) {
             const logsDiv = document.getElementById('logs');
             logsDiv.innerHTML = '';
+            allUserLogs = [];
             const querySnapshot = await db.collection('logs')
                 .where('userId', '==', userId)
                 .orderBy('timestamp', 'desc')
                 .get();
             querySnapshot.forEach(doc => {
                 const log = doc.data();
-                logsDiv.innerHTML += `<div class="log-entry">
-                    <p><b>${log.email}</b> (${new Date(log.timestamp?.toDate()).toLocaleString()}):</p>
+                allUserLogs.push(log);
+                logsDiv.innerHTML += `<div class="log-entry p-2">
+                    <p class="text-sm text-gray-500"><b>${log.email}</b> (${new Date(log.timestamp?.toDate()).toLocaleString()}):</p>
                     <p><b>You:</b> ${log.input}</p>
                     <p><b>AI:</b> ${log.response}</p>
                 </div>`;
             });
+        }
+
+        // Search logs
+        function searchLogs() {
+            const searchTerm = document.getElementById('logSearch').value.toLowerCase();
+            const logsDiv = document.getElementById('logs');
+            logsDiv.innerHTML = '';
+            allUserLogs
+                .filter(log => log.input.toLowerCase().includes(searchTerm) || log.response.toLowerCase().includes(searchTerm))
+                .forEach(log => {
+                    logsDiv.innerHTML += `<div class="log-entry p-2">
+                        <p class="text-sm text-gray-500"><b>${log.email}</b> (${new Date(log.timestamp?.toDate()).toLocaleString()}):</p>
+                        <p><b>You:</b> ${log.input}</p>
+                        <p><b>AI:</b> ${log.response}</p>
+                    </div>`;
+                });
         }
 
         // Load all logs (boss view)
@@ -213,8 +239,8 @@
                 .get();
             querySnapshot.forEach(doc => {
                 const log = doc.data();
-                allLogsDiv.innerHTML += `<div class="log-entry">
-                    <p><b>${log.email}</b> (${new Date(log.timestamp?.toDate()).toLocaleString()}):</p>
+                allLogsDiv.innerHTML += `<div class="log-entry p-2">
+                    <p class="text-sm text-gray-500"><b>${log.email}</b> (${new Date(log.timestamp?.toDate()).toLocaleString()}):</p>
                     <p><b>User:</b> ${log.input}</p>
                     <p><b>AI:</b> ${log.response}</p>
                 </div>`;
