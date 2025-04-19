@@ -1,267 +1,187 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#6200ea">
-    <title>Smart Bot Hub</title>
-    <link rel="manifest" href="manifest.json">
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-    <style>
-        #chatArea { max-height: 300px; overflow-y: auto; }
-        .log-entry { border-bottom: 1px solid #e5e7eb; }
-    </style>
-</head>
-<body class="bg-gray-100">
-    <div class="max-w-md mx-auto bg-white p-6 rounded-lg shadow-md mt-4">
-        <div id="login" class="space-y-4">
-            <h2 class="text-2xl font-bold text-center">Smart Bot Hub Login</h2>
-            <input type="email" id="email" placeholder="Email" class="border rounded p-2 w-full">
-            <input type="password" id="password" placeholder="Password" class="border rounded p-2 w-full">
-            <button onclick="signIn()" class="bg-purple-600 text-white p-2 rounded w-full hover:bg-purple-700">Login</button>
-            <button onclick="signUp()" class="bg-gray-600 text-white p-2 rounded w-full hover:bg-gray-700">Sign Up</button>
-            <p class="text-red-500 text-center" id="error"></p>
-        </div>
-        <div id="hub" class="space-y-4 hidden">
-            <h2 class="text-2xl font-bold text-center">Smart Bot Hub</h2>
-            <p>Welcome, <span id="userEmail" class="font-semibold"></span>! <button onclick="signOut()" class="text-purple-600 underline">Logout</button></p>
-            <div class="space-y-2">
-                <input type="text" id="userInput" placeholder="Ask the AI..." class="border rounded p-2 w-full">
-                <button onclick="sendMessage()" class="bg-purple-600 text-white p-2 rounded w-full hover:bg-purple-700">Send</button>
-            </div>
-            <div id="chatArea" class="p-4 bg-gray-50 rounded"></div>
-            <div class="space-y-2">
-                <h3 class="text-xl font-semibold">Your Logs</h3>
-                <input type="text" id="logSearch" placeholder="Search logs..." class="border rounded p-2 w-full" oninput="searchLogs()">
-                <div id="logs" class="space-y-2"></div>
-            </div>
-            <div id="bossArea" class="space-y-2 hidden">
-                <h3 class="text-xl font-semibold">Boss View: All Logs</h3>
-                <div id="allLogs" class="space-y-2"></div>
-            </div>
-        </div>
-    </div>
+<!DOCTYPE html> <html lang="en"> <head> <meta charset="UTF-8"> <meta name="viewport" content="width=device-width, initial-scale=1.0"> <meta name="theme-color" content="#6200ea"> <title>Smart Bot Hub</title> <link rel="manifest" href="/manifest.json"> <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet"> <style> #chatArea { max-height: 300px; overflow-y: auto; } .log-entry { border-bottom: 1px solid #e5e7eb; } </style> </head> <body class="bg-gray-100"> <div class="max-w-md mx-auto bg-white p-6 rounded-lg shadow-md mt-4"> <div id="login" class="space-y-4"> <h2 class="text-2xl font-bold text-center">Smart Bot Hub Login</h2> <input type="email" id="email" placeholder="Email" class="border rounded p-2 w-full"> <input type="password" id="password" placeholder="Password" class="border rounded p-2 w-full"> <button onclick="signIn()" class="bg-purple-600 text-white p-2 rounded w-full hover:bg-purple-700">Login</button> <button onclick="signUp()" class="bg-gray-600 text-white p-2 rounded w-full hover:bg-gray-700">Sign Up</button> <p class="text-red-500 text-center" id="error"></p> </div> <div id="hub" class="space-y-4 hidden"> <h2 class="text-2xl font-bold text-center">Smart Bot Hub</h2> <p>Welcome, <span id="userEmail" class="font-semibold"></span>! <button onclick="signOut()" class="text-purple-600 underline">Logout</button></p> <div class="space-y-2"> <h3 class="text-xl font-semibold">Unified AI</h3> <p class="text-gray-600">I’m your hub’s brain—build bots, manage them, or just chat!</p> <input type="text" id="userInput" placeholder="Ask the Unified AI..." class="border rounded p-2 w-full"> <button onclick="sendMessage()" class="bg-purple-600 text-white p-2 rounded w-full hover:bg-purple-700">Send</button> </div> <div id="chatArea" class="p-4 bg-gray-50 rounded"></div> <div class="space-y-2"> <h3 class="text-xl font-semibold">Your Bots</h3> <select id="globalCommand" class="border rounded p-2 w-full"> <option value="">Global Command</option> <option value="Start All">Start All</option> <option value="Stop All">Stop All</option> <option value="Restart All">Restart All</option> </select> <button onclick="sendGlobalCommand()" class="bg-blue-600 text-white p-2 rounded w-full hover:bg-blue-700">Execute Global Command</button> <div id="bots" class="space-y-2"></div> </div> <div class="space-y-2"> <h3 class="text-xl font-semibold">Your Logs</h3> <input type="text" id="logSearch" placeholder="Search logs..." class="border rounded p-2 w-full" oninput="searchLogs()"> <button onclick="exportLogs()" class="bg-green-600 text-white p-2 rounded w-full hover:bg-green-700">Export Logs as CSV</button> <div id="logs" class="space-y-2"></div> </div> <div id="bossArea" class="space-y-2 hidden"> <h3 class="text-xl font-semibold">Boss View: All Logs</h3> <div id="allLogs" class="space-y-2"></div> </div> </div> </div> <!-- Firebase SDK --> <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script> <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script> <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script> <!-- IndexedDB --> <script src="https://cdn.jsdelivr.net/npm/idb@7.0.1/build/iife/index-min.js"></script> <script> // Firebase configuration const firebaseConfig = { apiKey: "AIzaSyBONwaRl23VeTJISmiQ3X-t3y6FGK7Ngjc", authDomain: "tglsmarthub.firebaseapp.com", projectId: "tglsmarthub", storageBucket: "tglsmarthub.firebasestorage.app", messagingSenderId: "361291241205", appId: "1:361291241205:web:854f79a0238e6e4795d7bc", measurementId: "G-LQ4BP8GG37" }; // Initialize Firebase firebase.initializeApp(firebaseConfig); const auth = firebase.auth(); const db = firebase.firestore(); // IndexedDB for bots let botDB; async function initBotDB() { botDB = await idb.openDB('bot-hub', 1, { upgrade(db) { db.createObjectStore('bots', { keyPath: 'id', autoIncrement: true }); } }); } initBotDB(); // Unified AI state let conversationHistory = []; let allUserLogs = []; let bots = []; // Check user state auth.onAuthStateChanged(user => { if (user) { document.getElementById('login').classList.add('hidden'); document.getElementById('hub').classList.remove('hidden'); document.getElementById('userEmail').textContent = user.email; loadBots(); loadLogs(user.uid); checkBossAccess(user.email); // Unified AI welcome document.getElementById('chatArea').innerHTML += `<p class="text-purple-600"><b>Unified AI:</b> Yo, ${user.email}! I’m the brain of this hub. Build a bot, check statuses, or just vibe!</p>`; checkIdleBots(); } else { document.getElementById('login').classList.remove('hidden'); document.getElementById('hub').classList.add('hidden'); document.getElementById('chatArea').innerHTML = ''; } }); // Validate email format function isValidEmail(email) { const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/; return emailRegex.test(email); } // Sign Up function signUp() { const email = document.getElementById('email').value.trim(); const password = document.getElementById('password').value; if (!email || !password) { showMessage('Please enter both email and password.'); return; } if (!isValidEmail(email)) { showMessage('Invalid email format. Use something like user@example.com.'); return; } if (password.length < 6) { showMessage('Password must be at least 6 characters.'); return; } auth.createUserWithEmailAndPassword(email, password) .then(() => showMessage('Signed up! Logging you in...')) .catch(error => showMessage(error.message)); } // Sign In function signIn() { const email = document.getElementById('email').value.trim(); const password = document.getElementById('password').value; if (!email || !password) { showMessage('Please enter both email and password.'); return; } if (!isValidEmail(email)) { showMessage('Invalid email format. Use something like user@example.com.'); return; } auth.signInWithEmailAndPassword(email, password) .then(() => showMessage('Logged in!')) .catch(error => showMessage(error.message)); } // Sign Out function signOut() { auth.signOut().then(() => showMessage('Logged out!')); } // Check if user is "boss" function checkBossAccess(email) { const bossEmails = ['boss@example.com']; // Update with real boss emails if (bossEmails.includes(email)) { document.getElementById('bossArea').classList.remove('hidden'); loadAllLogs(); } else { document.getElementById('bossArea').classList.add('hidden'); } } // Unified AI Logic async function getAIResponse(input) { const lowerInput = input.toLowerCase(); let response; // Hub queries if (lowerInput.includes('hub') || lowerInput.includes('status') || lowerInput.includes('bots')) { const runningBots = bots.filter(b => b.status === 'Running').map(b => b.name).join(', '); response = lowerInput.includes('running') ? `Running bots: ${runningBots || 'None'}` : `Hub status: ${bots.length} bots, ${allUserLogs.length} logs. Ask for details!`; } // Bot-building else if (lowerInput.includes('build') || lowerInput.includes('create') || lowerInput.includes('bot')) { if (lowerInput.includes('weather')) { response = await generateWeatherBot(input); } else if (lowerInput.includes('scraper')) { response = await generateScraperBot(input); } else { response = 'What kind of bot? E.g., weather, scraper, or custom task?'; } } // General conversation else { response = conversationHistory.includes(input) ? `Yo, you said "${input}" before! Let’s switch it up—bot ideas or hub status?` : `Cool, "${input}"? Wanna talk bots, hub, or keep vibing?`; } conversationHistory.push(input); return response; } // Generate Weather Bot async function generateWeatherBot(input) { const bot = { id: Date.now(), name: 'Weather Bot', code: `import requests # Fetches weather data for a city def fetch_weather(city): try: url = f"https://api.weatherapi.com/v1/current.json?key=YOUR_KEY&q={city}" response = requests.get(url) if response.status_code == 200: return response.json() else: raise Exception("API request failed") except Exception as e: print(f"Error: {e}") return None `, description: 'Fetches current weather for a specified city using Weather API.', status: 'Idle', performance: 80 }; await botDB.add('bots', bot); bots.push(bot); renderBots(); return `Created Weather Bot for "${input}". City? Add email alerts? Status: ${bot.status}`; } // Generate Scraper Bot async function generateScraperBot(input) { const bot = { id: Date.now(), name: 'Scraper Bot', code: `import requests from bs4 import BeautifulSoup # Scrapes a website for data def scrape_website(url): try: response = requests.get(url) if response.status_code == 200: soup = BeautifulSoup(response.text, 'html.parser') data = [p.text for p in soup.find_all('p')] return data else: raise Exception("Failed to fetch website") except Exception as e: print(f"Error: {e}") return None `, description: 'Scrapes a website for paragraph text using BeautifulSoup.', status: 'Idle', performance: 75 }; await botDB.add('bots', bot); bots.push(bot); renderBots(); return `Created Scraper Bot for "${input}". Target URL? Save as JSON or CSV? Status: ${bot.status}`; } // Send message to Unified AI async function sendMessage() { const input = document.getElementById('userInput').value.trim(); if (!input) { showMessage('Type something to chat with the Unified AI!'); return; } const user = auth.currentUser; if (!user) { showMessage('Please log in to chat.'); return; } const chatArea = document.getElementById('chatArea'); chatArea.innerHTML += `<p class="text-gray-800"><b>You:</b> ${input}</p>`; const response = await getAIResponse(input); chatArea.innerHTML += `<p class="text-purple-600"><b>Unified AI:</b> ${response}</p>`; chatArea.scrollTop = chatArea.scrollHeight; await db.collection('logs').add({ userId: user.uid, email: user.email, input: input, response: response, timestamp: firebase.firestore.FieldValue.serverTimestamp() }); loadLogs(user.uid); document.getElementById('userInput').value = ''; } // Load bots from IndexedDB async function loadBots() { bots = await botDB.getAll('bots'); renderBots(); } // Render bots function renderBots() { const botsDiv = document.getElementById('bots'); botsDiv.innerHTML = ''; bots.forEach(bot => { botsDiv.innerHTML += ` <div class="p-2 bg-gray-50 rounded"> <p><b>${bot.name}</b> (${bot.status}, Perf: ${bot.performance}%)</p> <p class="text-sm text-gray-500">${bot.description}</p> <pre class="text-sm bg-white p-2 rounded mt-1">${bot.code}</pre> <select onchange="sendCommand(${bot.id}, this.value)" class="border rounded p-1 w-full mt-1"> <option value="">Command</option> <option value="Start">Start</option> <option value="Stop">Stop</option> <option value="Restart">Restart</option> </select> <button onclick="editBot(${bot.id})" class="bg-yellow-500 text-white p-1 rounded w-full mt-1 hover:bg-yellow-600">Edit Code</button> <button onclick="copyCode(${bot.id})" class="bg-gray-500 text-white p-1 rounded w-full mt-1 hover:bg-gray-600">Copy Code</button> <button onclick="addFunction(${bot.id})" class="bg-blue-500 text-white p-1 rounded w-full mt-1 hover:bg-blue-600">Add Function</button> </div> `; }); }
+// Send bot command
+async function sendCommand(botId, cmd) {
+if (!cmd) return;
+const bot = bots.find(b => b.id === botId);
+const newStatus = cmd === 'Start' ? 'Running' : cmd === 'Stop' ? 'Idle' : 'Restarting';
+const updatedBot = { ...bot, status: newStatus };
+await botDB.put('bots', updatedBot);
+bots = bots.map(b => b.id === botId ? updatedBot : b);
+renderBots();
+const user = auth.currentUser;
+await db.collection('logs').add({
+userId: user.uid,
+email: user.email,
+input: Command ${cmd} for ${bot.name},
+response: Unified AI: ${bot.name} status updated to ${newStatus},
+timestamp: firebase.firestore.FieldValue.serverTimestamp()
+});
+loadLogs(user.uid);
+}
 
-    <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+// Send global command
+async function sendGlobalCommand() {
+const cmd = document.getElementById('globalCommand').value;
+if (!cmd) {
+showMessage('Select a global command!');
+return;
+}
+const newStatus = cmd === 'Start All' ? 'Running' : cmd === 'Stop All' ? 'Idle' : 'Restarting';
+const updatedBots = bots.map(bot => ({ ...bot, status: newStatus }));
+for (const bot of updatedBots) {
+await botDB.put('bots', bot);
+}
+bots = updatedBots;
+renderBots();
+const user = auth.currentUser;
+await db.collection('logs').add({
+userId: user.uid,
+email: user.email,
+input: Global command: ${cmd},
+response: Unified AI: All bots updated to ${newStatus},
+timestamp: firebase.firestore.FieldValue.serverTimestamp()
+});
+loadLogs(user.uid);
+document.getElementById('globalCommand').value = '';
+}
 
-    <script>
-        // Firebase configuration
-        const firebaseConfig = {
-            apiKey: "AIzaSyBONwaRl23VeTJISmiQ3X-t3y6FGK7Ngjc",
-            authDomain: "tglsmarthub.firebaseapp.com",
-            projectId: "tglsmarthub",
-            storageBucket: "tglsmarthub.firebasestorage.app",
-            messagingSenderId: "361291241205",
-            appId: "1:361291241205:web:854f79a0238e6e4795d7bc",
-            measurementId: "G-LQ4BP8GG37"
-        };
+// Edit bot code
+async function editBot(botId) {
+const bot = bots.find(b => b.id === botId);
+const newCode = prompt('Edit code:', bot.code);
+if (newCode) {
+const updatedBot = { ...bot, code: newCode, status: 'Updated' };
+await botDB.put('bots', updatedBot);
+bots = bots.map(b => b.id === botId ? updatedBot : b);
+renderBots();
+const user = auth.currentUser;
+await db.collection('logs').add({
+userId: user.uid,
+email: user.email,
+input: Edited code for ${bot.name},
+response: Unified AI: ${bot.name} code updated,
+timestamp: firebase.firestore.FieldValue.serverTimestamp()
+});
+loadLogs(user.uid);
+}
+}
 
-        // Initialize Firebase
-        firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
-        const db = firebase.firestore();
+// Copy bot code
+function copyCode(botId) {
+const bot = bots.find(b => b.id === botId);
+navigator.clipboard.writeText(bot.code);
+showMessage('Code copied to clipboard!');
+}
 
-        // Check user state
-        auth.onAuthStateChanged(user => {
-            if (user) {
-                document.getElementById('login').classList.add('hidden');
-                document.getElementById('hub').classList.remove('hidden');
-                document.getElementById('userEmail').textContent = user.email;
-                loadLogs(user.uid);
-                checkBossAccess(user.email);
-            } else {
-                document.getElementById('login').classList.remove('hidden');
-                document.getElementById('hub').classList.add('hidden');
-            }
-        });
+// Add function to bot
+async function addFunction(botId) {
+const bot = bots.find(b => b.id === botId);
+const func = prompt('Add function (e.g., logging, email):');
+if (func) {
+let newCode = bot.code;
+if (func.toLowerCase() === 'logging') {
+newCode += def log_activity(message):     with open('bot.log', 'a') as f:         f.write(f"{message}\\n")     print(f"Logged: {message}");
+} else if (func.toLowerCase() === 'email') {
+newCode += def send_email(subject, body, recipient):     print(f"Sending email to {recipient}: {subject}");
+}
+const updatedBot = { ...bot, code: newCode, status: 'Updated' };
+await botDB.put('bots', updatedBot);
+bots = bots.map(b => b.id === botId ? updatedBot : b);
+renderBots();
+const user = auth.currentUser;
+await db.collection('logs').add({
+userId: user.uid,
+email: user.email,
+input: Added ${func} to ${bot.name},
+response: Unified AI: Added ${func} function to ${bot.name},
+timestamp: firebase.firestore.FieldValue.serverTimestamp()
+});
+loadLogs(user.uid);
+}
+}
 
-        // Validate email format
-        function isValidEmail(email) {
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            return emailRegex.test(email);
-        }
+// Check for idle bots
+function checkIdleBots() {
+const idleBots = bots.filter(b => b.status === 'Idle').map(b => b.name).join(', ');
+if (idleBots) {
+document.getElementById('chatArea').innerHTML += <p class="text-purple-600"><b>Unified AI:</b> Idle bots: ${idleBots}. Deploy them?</p>;
+}
+}
 
-        // Sign Up
-        function signUp() {
-            const email = document.getElementById('email').value.trim();
-            const password = document.getElementById('password').value;
-            if (!email || !password) {
-                showMessage('Please enter both email and password.');
-                return;
-            }
-            if (!isValidEmail(email)) {
-                showMessage('Invalid email format. Use something like user@example.com.');
-                return;
-            }
-            if (password.length < 6) {
-                showMessage('Password must be at least 6 characters.');
-                return;
-            }
-            auth.createUserWithEmailAndPassword(email, password)
-                .then(() => showMessage('Signed up! Logging you in...'))
-                .catch(error => showMessage(error.message));
-        }
+// Load user logs
+async function loadLogs(userId) {
+const logsDiv = document.getElementById('logs');
+logsDiv.innerHTML = '';
+allUserLogs = [];
+const querySnapshot = await db.collection('logs')
+.where('userId', '==', userId)
+.orderBy('timestamp', 'desc')
+.get();
+querySnapshot.forEach(doc => {
+const log = doc.data();
+allUserLogs.push(log);
+logsDiv.innerHTML += `<div class="log-entry p-2">
 
-        // Sign In
-        function signIn() {
-            const email = document.getElementById('email').value.trim();
-            const password = document.getElementById('password').value;
-            if (!email || !password) {
-                showMessage('Please enter both email and password.');
-                return;
-            }
-            if (!isValidEmail(email)) {
-                showMessage('Invalid email format. Use something like user@example.com.');
-                return;
-            }
-            auth.signInWithEmailAndPassword(email, password)
-                .then(() => showMessage('Logged in!'))
-                .catch(error => showMessage(error.message));
-        }
+<p class="text-sm text-gray-500"><b>${log.email}</b> (${new Date(log.timestamp?.toDate()).toLocaleString()}):</p> <p><b>You:</b> ${log.input}</p> <p><b>AI:</b> ${log.response}</p> </div>`; }); }
+// Search logs
+function searchLogs() {
+const searchTerm = document.getElementById('logSearch').value.toLowerCase();
+const logsDiv = document.getElementById('logs');
+logsDiv.innerHTML = '';
+allUserLogs
+.filter(log => log.input.toLowerCase().includes(searchTerm) || log.response.toLowerCase().includes(searchTerm))
+.forEach(log => {
+logsDiv.innerHTML += `<div class="log-entry p-2">
 
-        // Sign Out
-        function signOut() {
-            auth.signOut().then(() => showMessage('Logged out!'));
-        }
+<p class="text-sm text-gray-500"><b>${log.email}</b> (${new Date(log.timestamp?.toDate()).toLocaleString()}):</p> <p><b>You:</b> ${log.input}</p> <p><b>AI:</b> ${log.response}</p> </div>`; }); }
+// Load all logs (boss view)
+async function loadAllLogs() {
+const allLogsDiv = document.getElementById('allLogs');
+allLogsDiv.innerHTML = '';
+const querySnapshot = await db.collection('logs')
+.orderBy('timestamp', 'desc')
+.get();
+querySnapshot.forEach(doc => {
+const log = doc.data();
+allLogsDiv.innerHTML += `<div class="log-entry p-2">
 
-        // Check if user is "boss"
-        function checkBossAccess(email) {
-            const bossEmails = ['boss@example.com']; // Update with real boss emails
-            if (bossEmails.includes(email)) {
-                document.getElementById('bossArea').classList.remove('hidden');
-                loadAllLogs();
-            } else {
-                document.getElementById('bossArea').classList.add('hidden');
-            }
-        }
+<p class="text-sm text-gray-500"><b>${log.email}</b> (${new Date(log.timestamp?.toDate()).toLocaleString()}):</p> <p><b>User:</b> ${log.input}</p> <p><b>AI:</b> ${log.response}</p> </div>`; }); }
+// Export logs as CSV
+function exportLogs() {
+const csv = allUserLogs.map(log => "${log.email}","${log.timestamp?.toDate().toISOString()}","${log.input.replace(/"/g, '""')}","${log.response.replace(/"/g, '""')}").join('\n');
+const blob = new Blob([Email,Timestamp,Input,Response\n${csv}], { type: 'text/csv' });
+const url = URL.createObjectURL(blob);
+const a = document.createElement('a');
+a.href = url;
+a.download = 'logs.csv';
+a.click();
+URL.revokeObjectURL(url);
+}
 
-        // Simulated AI with context awareness
-        let conversationHistory = [];
-        async function getAIResponse(input) {
-            if (conversationHistory.includes(input)) {
-                return `Yo, you asked "${input}" again? Here's a fresh spin: ${simulateAIResponse(input, true)}`;
-            }
-            conversationHistory.push(input);
-            return simulateAIResponse(input, false);
-        }
+// Show temporary message
+function showMessage(msg) {
+const errorDiv = document.getElementById('error');
+errorDiv.textContent = msg;
+setTimeout(() => errorDiv.textContent = '', 3000);
+}
 
-        // Simulate AI response (Grok-like personality)
-        function simulateAIResponse(input, isFollowUp) {
-            const responses = [
-                `Alright, "${input}"? That’s a vibe! Imagine it’s like ${input} cranked to 11 with extra sauce.`,
-                `Whoa, "${input}" hits hard! It’s like solving a puzzle in a sci-fi flick—here’s my take.`,
-                `Yo, "${input}"? Picture it as a cosmic taco stuffed with ideas. Let’s unpack it!`
-            ];
-            const followUps = [
-                `Back for more on "${input}"? It’s like diving into a sequel with extra plot twists!`,
-                `Round two for "${input}"? Let’s remix it with some next-level chaos!`
-            ];
-            return isFollowUp ? followUps[Math.floor(Math.random() * followUps.length)] : responses[Math.floor(Math.random() * responses.length)];
-        }
+// Service Worker registration
+if ('serviceWorker' in navigator) {
+window.addEventListener('load', () => {
+navigator.serviceWorker.register('/service-worker.js', { scope: '/' })
+.then(registration => {
+console.log('Service Worker Registered:', registration.scope);
+showMessage('Service Worker registered successfully!');
+})
+.catch(err => {
+console.error('Service Worker Registration Failed:', err);
+showMessage(Service Worker failed: ${err.message || err});
+});
+});
+} else {
+console.warn('Service Workers not supported in this browser.');
+showMessage('Service Workers not supported in this browser.');
+}
+</script>
 
-        // Send message to AI
-        async function sendMessage() {
-            const input = document.getElementById('userInput').value.trim();
-            if (!input) {
-                showMessage('Type something to chat with the AI!');
-                return;
-            }
-            const user = auth.currentUser;
-            if (!user) {
-                showMessage('Please log in to chat.');
-                return;
-            }
-
-            const chatArea = document.getElementById('chatArea');
-            chatArea.innerHTML += `<p class="text-gray-800"><b>You:</b> ${input}</p>`;
-            const response = await getAIResponse(input);
-            chatArea.innerHTML += `<p class="text-purple-600"><b>AI:</b> ${response}</p>`;
-            chatArea.scrollTop = chatArea.scrollHeight;
-
-            await db.collection('logs').add({
-                userId: user.uid,
-                email: user.email,
-                input: input,
-                response: response,
-                timestamp: firebase.firestore.FieldValue.serverTimestamp()
-            });
-
-            loadLogs(user.uid);
-            document.getElementById('userInput').value = '';
-        }
-
-        // Load user logs
-        let allUserLogs = [];
-        async function loadLogs(userId) {
-            const logsDiv = document.getElementById('logs');
-            logsDiv.innerHTML = '';
-            allUserLogs = [];
-            const querySnapshot = await db.collection('logs')
-                .where('userId', '==', userId)
-                .orderBy('timestamp', 'desc')
-                .get();
-            querySnapshot.forEach(doc => {
-                const log = doc.data();
-                allUserLogs.push(log);
-                logsDiv.innerHTML += `<div class="log-entry p-2">
-                    <p class="text-sm text-gray-500"><b>${log.email}</b> (${new Date(log.timestamp?.toDate()).toLocaleString()}):</p>
-                    <p><b>You:</b> ${log.input}</p>
-                    <p><b>AI:</b> ${log.response}</p>
-                </div>`;
-            });
-        }
-
-        // Search logs
-        function searchLogs() {
-            const searchTerm = document.getElementById('logSearch').value.toLowerCase();
-            const logsDiv = document.getElementById('logs');
-            logsDiv.innerHTML = '';
-            allUserLogs
-                .filter(log => log.input.toLowerCase().includes(searchTerm) || log.response.toLowerCase().includes(searchTerm))
-                .forEach(log => {
-                    logsDiv.innerHTML += `<div class="log-entry p-2">
-                        <p class="text-sm text-gray-500"><b>${log.email}</b> (${new Date(log.timestamp?.toDate()).toLocaleString()}):</p>
-                        <p><b>You:</b> ${log.input}</p>
-                        <p><b>AI:</b> ${log.response}</p>
-                    </div>`;
-                });
-        }
-
-        // Load all logs (boss view)
-        async function loadAllLogs() {
-            const allLogsDiv = document.getElementById('allLogs');
-            allLogsDiv.innerHTML = '';
-            const querySnapshot = await db.collection('logs')
-                .orderBy('timestamp', 'desc')
-                .get();
-            querySnapshot.forEach(doc => {
-                const log = doc.data();
-                allLogsDiv.innerHTML += `<div class="log-entry p-2">
-                    <p class="text-sm text-gray-500"><b>${log.email}</b> (${new Date(log.timestamp?.toDate()).toLocaleString()}):</p>
-                    <p><b>User:</b> ${log.input}</p>
-                    <p><b>AI:</b> ${log.response}</p>
-                </div>`;
-            });
-        }
-
-        // Show temporary message
-        function showMessage(msg) {
-            const errorDiv = document.getElementById('error');
-            errorDiv.textContent = msg;
-            setTimeout(() => errorDiv.textContent = '', 3000);
-        }
-
-        // Service Worker registration
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js')
-                    .then(registration => console.log('Service Worker Registered:', registration.scope))
-                    .catch(err => console.error('Service Worker Registration Failed:', err));
-            });
-        }
-    </script>
-</body>
-</html>
+</body> </html>
