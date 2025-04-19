@@ -48,7 +48,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 
     <script>
-        // Firebase configuration (replace with your own config)
+        // Firebase configuration
         const firebaseConfig = {
             apiKey: "AIzaSyBONwaRl23VeTJISmiQ3X-t3y6FGK7Ngjc",
             authDomain: "tglsmarthub.firebaseapp.com",
@@ -78,22 +78,48 @@
             }
         });
 
+        // Validate email format
+        function isValidEmail(email) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            return emailRegex.test(email);
+        }
+
         // Sign Up
         function signUp() {
-            const email = document.getElementById('email').value;
+            const email = document.getElementById('email').value.trim();
             const password = document.getElementById('password').value;
+            if (!email || !password) {
+                showMessage('Please enter both email and password.');
+                return;
+            }
+            if (!isValidEmail(email)) {
+                showMessage('Invalid email format. Use something like user@example.com.');
+                return;
+            }
+            if (password.length < 6) {
+                showMessage('Password must be at least 6 characters.');
+                return;
+            }
             auth.createUserWithEmailAndPassword(email, password)
                 .then(() => showMessage('Signed up! Logging you in...'))
-                .catch(error => document.getElementById('error').textContent = error.message);
+                .catch(error => showMessage(error.message));
         }
 
         // Sign In
         function signIn() {
-            const email = document.getElementById('email').value;
+            const email = document.getElementById('email').value.trim();
             const password = document.getElementById('password').value;
+            if (!email || !password) {
+                showMessage('Please enter both email and password.');
+                return;
+            }
+            if (!isValidEmail(email)) {
+                showMessage('Invalid email format. Use something like user@example.com.');
+                return;
+            }
             auth.signInWithEmailAndPassword(email, password)
                 .then(() => showMessage('Logged in!'))
-                .catch(error => document.getElementById('error').textContent = error.message);
+                .catch(error => showMessage(error.message));
         }
 
         // Sign Out
@@ -103,7 +129,6 @@
 
         // Check if user is "boss"
         function checkBossAccess(email) {
-            // Replace with your boss email(s)
             const bossEmails = ['boss@example.com'];
             if (bossEmails.includes(email)) {
                 document.getElementById('bossArea').style.display = 'block';
@@ -114,7 +139,6 @@
         // Simulated AI with context awareness
         let conversationHistory = [];
         async function getAIResponse(input) {
-            // Avoid repetitive answers by tracking history
             if (conversationHistory.includes(input)) {
                 return `I see you asked "${input}" before! How about a deeper take: ${simulateAIResponse(input, true)}`;
             }
@@ -143,16 +167,13 @@
             const user = auth.currentUser;
             if (!user) return;
 
-            // Display user message
             const chatArea = document.getElementById('chatArea');
             chatArea.innerHTML += `<p><b>You:</b> ${input}</p>`;
 
-            // Get and display AI response
             const response = await getAIResponse(input);
             chatArea.innerHTML += `<p><b>AI:</b> ${response}</p>`;
             chatArea.scrollTop = chatArea.scrollHeight;
 
-            // Save log
             await db.collection('logs').add({
                 userId: user.uid,
                 email: user.email,
@@ -161,7 +182,6 @@
                 timestamp: firebase.firestore.FieldValue.serverTimestamp()
             });
 
-            // Reload logs
             loadLogs(user.uid);
             document.getElementById('userInput').value = '';
         }
@@ -208,11 +228,13 @@
             setTimeout(() => errorDiv.textContent = '', 3000);
         }
 
-        // Service Worker for offline support
+        // Service Worker registration
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js')
-                .then(() => console.log('Service Worker Registered'))
-                .catch(err => console.error('Service Worker Error:', err));
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(registration => console.log('Service Worker Registered:', registration.scope))
+                    .catch(err => console.error('Service Worker Registration Failed:', err));
+            });
         }
     </script>
 </body>
