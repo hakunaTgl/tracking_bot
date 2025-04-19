@@ -1,18 +1,24 @@
-<xaiArtifact artifact_id="10e73b61-63c7-4a98-aa82-4bb4b61a32d1" artifact_version_id="c0718dc3-0f21-4a32-ac18-2dd9edec5ca7" title="service-worker.js" contentType="application/javascript">
 self.addEventListener('install', event => {
     event.waitUntil(
-        caches.open('bot-hub-cache-v2').then(cache => {
+        caches.open('bot-hub-cache-v3').then(cache => {
             return cache.addAll([
                 '/',
                 '/index.html',
                 '/manifest.json',
-                '/icon.png'
+                '/icon.png',
+                'https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.min.js'
             ]);
         })
     );
 });
 
 self.addEventListener('fetch', event => {
+    const url = new URL(event.request.url);
+    // Bypass Firebase requests
+    if (url.hostname.includes('firebase') || url.hostname.includes('googleapis')) {
+        event.respondWith(fetch(event.request));
+        return;
+    }
     event.respondWith(
         caches.match(event.request).then(response => {
             return response || fetch(event.request).catch(() => {
