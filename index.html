@@ -1,187 +1,793 @@
-<!DOCTYPE html> <html lang="en"> <head> <meta charset="UTF-8"> <meta name="viewport" content="width=device-width, initial-scale=1.0"> <meta name="theme-color" content="#6200ea"> <title>Smart Bot Hub</title> <link rel="manifest" href="/manifest.json"> <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet"> <style> #chatArea { max-height: 300px; overflow-y: auto; } .log-entry { border-bottom: 1px solid #e5e7eb; } </style> </head> <body class="bg-gray-100"> <div class="max-w-md mx-auto bg-white p-6 rounded-lg shadow-md mt-4"> <div id="login" class="space-y-4"> <h2 class="text-2xl font-bold text-center">Smart Bot Hub Login</h2> <input type="email" id="email" placeholder="Email" class="border rounded p-2 w-full"> <input type="password" id="password" placeholder="Password" class="border rounded p-2 w-full"> <button onclick="signIn()" class="bg-purple-600 text-white p-2 rounded w-full hover:bg-purple-700">Login</button> <button onclick="signUp()" class="bg-gray-600 text-white p-2 rounded w-full hover:bg-gray-700">Sign Up</button> <p class="text-red-500 text-center" id="error"></p> </div> <div id="hub" class="space-y-4 hidden"> <h2 class="text-2xl font-bold text-center">Smart Bot Hub</h2> <p>Welcome, <span id="userEmail" class="font-semibold"></span>! <button onclick="signOut()" class="text-purple-600 underline">Logout</button></p> <div class="space-y-2"> <h3 class="text-xl font-semibold">Unified AI</h3> <p class="text-gray-600">I’m your hub’s brain—build bots, manage them, or just chat!</p> <input type="text" id="userInput" placeholder="Ask the Unified AI..." class="border rounded p-2 w-full"> <button onclick="sendMessage()" class="bg-purple-600 text-white p-2 rounded w-full hover:bg-purple-700">Send</button> </div> <div id="chatArea" class="p-4 bg-gray-50 rounded"></div> <div class="space-y-2"> <h3 class="text-xl font-semibold">Your Bots</h3> <select id="globalCommand" class="border rounded p-2 w-full"> <option value="">Global Command</option> <option value="Start All">Start All</option> <option value="Stop All">Stop All</option> <option value="Restart All">Restart All</option> </select> <button onclick="sendGlobalCommand()" class="bg-blue-600 text-white p-2 rounded w-full hover:bg-blue-700">Execute Global Command</button> <div id="bots" class="space-y-2"></div> </div> <div class="space-y-2"> <h3 class="text-xl font-semibold">Your Logs</h3> <input type="text" id="logSearch" placeholder="Search logs..." class="border rounded p-2 w-full" oninput="searchLogs()"> <button onclick="exportLogs()" class="bg-green-600 text-white p-2 rounded w-full hover:bg-green-700">Export Logs as CSV</button> <div id="logs" class="space-y-2"></div> </div> <div id="bossArea" class="space-y-2 hidden"> <h3 class="text-xl font-semibold">Boss View: All Logs</h3> <div id="allLogs" class="space-y-2"></div> </div> </div> </div> <!-- Firebase SDK --> <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script> <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script> <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script> <!-- IndexedDB --> <script src="https://cdn.jsdelivr.net/npm/idb@7.0.1/build/iife/index-min.js"></script> <script> // Firebase configuration const firebaseConfig = { apiKey: "AIzaSyBONwaRl23VeTJISmiQ3X-t3y6FGK7Ngjc", authDomain: "tglsmarthub.firebaseapp.com", projectId: "tglsmarthub", storageBucket: "tglsmarthub.firebasestorage.app", messagingSenderId: "361291241205", appId: "1:361291241205:web:854f79a0238e6e4795d7bc", measurementId: "G-LQ4BP8GG37" }; // Initialize Firebase firebase.initializeApp(firebaseConfig); const auth = firebase.auth(); const db = firebase.firestore(); // IndexedDB for bots let botDB; async function initBotDB() { botDB = await idb.openDB('bot-hub', 1, { upgrade(db) { db.createObjectStore('bots', { keyPath: 'id', autoIncrement: true }); } }); } initBotDB(); // Unified AI state let conversationHistory = []; let allUserLogs = []; let bots = []; // Check user state auth.onAuthStateChanged(user => { if (user) { document.getElementById('login').classList.add('hidden'); document.getElementById('hub').classList.remove('hidden'); document.getElementById('userEmail').textContent = user.email; loadBots(); loadLogs(user.uid); checkBossAccess(user.email); // Unified AI welcome document.getElementById('chatArea').innerHTML += `<p class="text-purple-600"><b>Unified AI:</b> Yo, ${user.email}! I’m the brain of this hub. Build a bot, check statuses, or just vibe!</p>`; checkIdleBots(); } else { document.getElementById('login').classList.remove('hidden'); document.getElementById('hub').classList.add('hidden'); document.getElementById('chatArea').innerHTML = ''; } }); // Validate email format function isValidEmail(email) { const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/; return emailRegex.test(email); } // Sign Up function signUp() { const email = document.getElementById('email').value.trim(); const password = document.getElementById('password').value; if (!email || !password) { showMessage('Please enter both email and password.'); return; } if (!isValidEmail(email)) { showMessage('Invalid email format. Use something like user@example.com.'); return; } if (password.length < 6) { showMessage('Password must be at least 6 characters.'); return; } auth.createUserWithEmailAndPassword(email, password) .then(() => showMessage('Signed up! Logging you in...')) .catch(error => showMessage(error.message)); } // Sign In function signIn() { const email = document.getElementById('email').value.trim(); const password = document.getElementById('password').value; if (!email || !password) { showMessage('Please enter both email and password.'); return; } if (!isValidEmail(email)) { showMessage('Invalid email format. Use something like user@example.com.'); return; } auth.signInWithEmailAndPassword(email, password) .then(() => showMessage('Logged in!')) .catch(error => showMessage(error.message)); } // Sign Out function signOut() { auth.signOut().then(() => showMessage('Logged out!')); } // Check if user is "boss" function checkBossAccess(email) { const bossEmails = ['boss@example.com']; // Update with real boss emails if (bossEmails.includes(email)) { document.getElementById('bossArea').classList.remove('hidden'); loadAllLogs(); } else { document.getElementById('bossArea').classList.add('hidden'); } } // Unified AI Logic async function getAIResponse(input) { const lowerInput = input.toLowerCase(); let response; // Hub queries if (lowerInput.includes('hub') || lowerInput.includes('status') || lowerInput.includes('bots')) { const runningBots = bots.filter(b => b.status === 'Running').map(b => b.name).join(', '); response = lowerInput.includes('running') ? `Running bots: ${runningBots || 'None'}` : `Hub status: ${bots.length} bots, ${allUserLogs.length} logs. Ask for details!`; } // Bot-building else if (lowerInput.includes('build') || lowerInput.includes('create') || lowerInput.includes('bot')) { if (lowerInput.includes('weather')) { response = await generateWeatherBot(input); } else if (lowerInput.includes('scraper')) { response = await generateScraperBot(input); } else { response = 'What kind of bot? E.g., weather, scraper, or custom task?'; } } // General conversation else { response = conversationHistory.includes(input) ? `Yo, you said "${input}" before! Let’s switch it up—bot ideas or hub status?` : `Cool, "${input}"? Wanna talk bots, hub, or keep vibing?`; } conversationHistory.push(input); return response; } // Generate Weather Bot async function generateWeatherBot(input) { const bot = { id: Date.now(), name: 'Weather Bot', code: `import requests # Fetches weather data for a city def fetch_weather(city): try: url = f"https://api.weatherapi.com/v1/current.json?key=YOUR_KEY&q={city}" response = requests.get(url) if response.status_code == 200: return response.json() else: raise Exception("API request failed") except Exception as e: print(f"Error: {e}") return None `, description: 'Fetches current weather for a specified city using Weather API.', status: 'Idle', performance: 80 }; await botDB.add('bots', bot); bots.push(bot); renderBots(); return `Created Weather Bot for "${input}". City? Add email alerts? Status: ${bot.status}`; } // Generate Scraper Bot async function generateScraperBot(input) { const bot = { id: Date.now(), name: 'Scraper Bot', code: `import requests from bs4 import BeautifulSoup # Scrapes a website for data def scrape_website(url): try: response = requests.get(url) if response.status_code == 200: soup = BeautifulSoup(response.text, 'html.parser') data = [p.text for p in soup.find_all('p')] return data else: raise Exception("Failed to fetch website") except Exception as e: print(f"Error: {e}") return None `, description: 'Scrapes a website for paragraph text using BeautifulSoup.', status: 'Idle', performance: 75 }; await botDB.add('bots', bot); bots.push(bot); renderBots(); return `Created Scraper Bot for "${input}". Target URL? Save as JSON or CSV? Status: ${bot.status}`; } // Send message to Unified AI async function sendMessage() { const input = document.getElementById('userInput').value.trim(); if (!input) { showMessage('Type something to chat with the Unified AI!'); return; } const user = auth.currentUser; if (!user) { showMessage('Please log in to chat.'); return; } const chatArea = document.getElementById('chatArea'); chatArea.innerHTML += `<p class="text-gray-800"><b>You:</b> ${input}</p>`; const response = await getAIResponse(input); chatArea.innerHTML += `<p class="text-purple-600"><b>Unified AI:</b> ${response}</p>`; chatArea.scrollTop = chatArea.scrollHeight; await db.collection('logs').add({ userId: user.uid, email: user.email, input: input, response: response, timestamp: firebase.firestore.FieldValue.serverTimestamp() }); loadLogs(user.uid); document.getElementById('userInput').value = ''; } // Load bots from IndexedDB async function loadBots() { bots = await botDB.getAll('bots'); renderBots(); } // Render bots function renderBots() { const botsDiv = document.getElementById('bots'); botsDiv.innerHTML = ''; bots.forEach(bot => { botsDiv.innerHTML += ` <div class="p-2 bg-gray-50 rounded"> <p><b>${bot.name}</b> (${bot.status}, Perf: ${bot.performance}%)</p> <p class="text-sm text-gray-500">${bot.description}</p> <pre class="text-sm bg-white p-2 rounded mt-1">${bot.code}</pre> <select onchange="sendCommand(${bot.id}, this.value)" class="border rounded p-1 w-full mt-1"> <option value="">Command</option> <option value="Start">Start</option> <option value="Stop">Stop</option> <option value="Restart">Restart</option> </select> <button onclick="editBot(${bot.id})" class="bg-yellow-500 text-white p-1 rounded w-full mt-1 hover:bg-yellow-600">Edit Code</button> <button onclick="copyCode(${bot.id})" class="bg-gray-500 text-white p-1 rounded w-full mt-1 hover:bg-gray-600">Copy Code</button> <button onclick="addFunction(${bot.id})" class="bg-blue-500 text-white p-1 rounded w-full mt-1 hover:bg-blue-600">Add Function</button> </div> `; }); }
-// Send bot command
-async function sendCommand(botId, cmd) {
-if (!cmd) return;
-const bot = bots.find(b => b.id === botId);
-const newStatus = cmd === 'Start' ? 'Running' : cmd === 'Stop' ? 'Idle' : 'Restarting';
-const updatedBot = { ...bot, status: newStatus };
-await botDB.put('bots', updatedBot);
-bots = bots.map(b => b.id === botId ? updatedBot : b);
-renderBots();
-const user = auth.currentUser;
-await db.collection('logs').add({
-userId: user.uid,
-email: user.email,
-input: Command ${cmd} for ${bot.name},
-response: Unified AI: ${bot.name} status updated to ${newStatus},
-timestamp: firebase.firestore.FieldValue.serverTimestamp()
-});
-loadLogs(user.uid);
-}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#6200ea">
+    <title>Smart Bot Hub</title>
+    <link rel="manifest" href="/manifest.json">
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        #chatArea { max-height: 300px; overflow-y: auto; }
+        .log-entry { border-bottom: 1px solid #e5e7eb; }
+        .toast { position: fixed; bottom: 20px; right: 20px; z-index: 50; }
+        .swipeable { touch-action: pan-y; }
+        .swipe-left { transform: translateX(-100px); transition: transform 0.3s; }
+        .swipe-right { transform: translateX(100px); transition: transform 0.3s; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 100; }
+        .modal-content { background: white; margin: 15% auto; padding: 20px; width: 80%; max-width: 400px; border-radius: 8px; }
+        .dark { background: #1f2937; color: #f9fafb; }
+        .dark .bg-white { background: #374151; }
+        .dark .bg-gray-50 { background: #4b5563; }
+        .dark .text-gray-800 { color: #d1d5db; }
+        .dark .text-purple-600 { color: #a78bfa; }
+        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #6200ea; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-gray-100 transition-colors duration-300">
+    <div class="max-w-md mx-auto bg-white p-6 rounded-lg shadow-md mt-4">
+        <div class="flex justify-between mb-4">
+            <h1 class="text-2xl font-bold">Smart Bot Hub</h1>
+            <button onclick="toggleTheme()" class="text-purple-600">Toggle Theme</button>
+        </div>
+        <div id="login" class="space-y-4">
+            <h2 class="text-2xl font-bold text-center">Login</h2>
+            <input type="email" id="email" placeholder="Email" class="border rounded p-2 w-full">
+            <input type="password" id="password" placeholder="Password" class="border rounded p-2 w-full">
+            <button onclick="signIn()" class="bg-purple-600 text-white p-2 rounded w-full hover:bg-purple-700 flex justify-center items-center">
+                <span id="loginSpinner" class="hidden spinner mr-2"></span>Login
+            </button>
+            <button onclick="signUp()" class="bg-gray-600 text-white p-2 rounded w-full hover:bg-gray-700 flex justify-center items-center">
+                <span id="signupSpinner" class="hidden spinner mr-2"></span>Sign Up
+            </button>
+            <p class="text-red-500 text-center" id="error"></p>
+        </div>
+        <div id="hub" class="space-y-4 hidden">
+            <p>Welcome, <span id="userEmail" class="font-semibold"></span>! <button onclick="signOut()" class="text-purple-600 underline">Logout</button></p>
+            <div class="space-y-2">
+                <h3 class="text-xl font-semibold">Unified AI</h3>
+                <p class="text-gray-600">I’m your hub’s brain—build bots, manage them, or chat!</p>
+                <input type="text" id="userInput" placeholder="Ask the Unified AI..." class="border rounded p-2 w-full">
+                <div class="flex gap-2">
+                    <button onclick="sendMessage()" class="flex-1 bg-purple-600 text-white p-2 rounded hover:bg-purple-700">Send</button>
+                    <button onclick="openWizard()" class="flex-1 bg-blue-600 text-white p-2 rounded hover:bg-blue-700">Bot Wizard</button>
+                </div>
+            </div>
+            <div id="chatArea" class="p-4 bg-gray-50 rounded"></div>
+            <div class="space-y-2">
+                <h3 class="text-xl font-semibold">Your Bots</h3>
+                <select id="globalCommand" class="border rounded p-2 w-full">
+                    <option value="">Global Command</option>
+                    <option value="Start All">Start All</option>
+                    <option value="Stop All">Stop All</option>
+                    <option value="Restart All">Restart All</option>
+                </select>
+                <button onclick="sendGlobalCommand()" class="bg-blue-600 text-white p-2 rounded w-full hover:bg-blue-700">Execute Global Command</button>
+                <div id="bots" class="space-y-2"></div>
+            </div>
+            <div class="space-y-2">
+                <h3 class="text-xl font-semibold">Your Logs</h3>
+                <div class="flex gap-2">
+                    <input type="text" id="logSearch" placeholder="Search logs..." class="border rounded p-2 flex-1" oninput="searchLogs()">
+                    <select id="logFilter" class="border rounded p-2" onchange="searchLogs()">
+                        <option value="">All Dates</option>
+                        <option value="today">Today</option>
+                        <option value="week">This Week</option>
+                    </select>
+                </div>
+                <button onclick="exportLogs()" class="bg-green-600 text-white p-2 rounded w-full hover:bg-green-700">Export Logs as CSV</button>
+                <div id="logs" class="space-y-2"></div>
+            </div>
+            <div id="bossArea" class="space-y-2 hidden">
+                <h3 class="text-xl font-semibold">Boss View: All Logs</h3>
+                <div id="allLogs" class="space-y-2"></div>
+            </div>
+        </div>
+    </div>
 
-// Send global command
-async function sendGlobalCommand() {
-const cmd = document.getElementById('globalCommand').value;
-if (!cmd) {
-showMessage('Select a global command!');
-return;
-}
-const newStatus = cmd === 'Start All' ? 'Running' : cmd === 'Stop All' ? 'Idle' : 'Restarting';
-const updatedBots = bots.map(bot => ({ ...bot, status: newStatus }));
-for (const bot of updatedBots) {
-await botDB.put('bots', bot);
-}
-bots = updatedBots;
-renderBots();
-const user = auth.currentUser;
-await db.collection('logs').add({
-userId: user.uid,
-email: user.email,
-input: Global command: ${cmd},
-response: Unified AI: All bots updated to ${newStatus},
-timestamp: firebase.firestore.FieldValue.serverTimestamp()
-});
-loadLogs(user.uid);
-document.getElementById('globalCommand').value = '';
-}
+    <!-- Bot Creation Wizard Modal -->
+    <div id="wizardModal" class="modal">
+        <div class="modal-content">
+            <h3 class="text-xl font-semibold mb-4">Bot Creation Wizard</h3>
+            <div id="wizardStep1">
+                <p class="mb-2">Choose bot type:</p>
+                <select id="botType" class="border rounded p-2 w-full mb-2">
+                    <option value="">Select Type</option>
+                    <option value="weather">Weather Bot</option>
+                    <option value="scraper">Web Scraper</option>
+                </select>
+                <button onclick="nextWizardStep()" class="bg-purple-600 text-white p-2 rounded w-full hover:bg-purple-700">Next</button>
+            </div>
+            <div id="wizardStep2" class="hidden">
+                <p class="mb-2">Enter parameters:</p>
+                <input id="botParams" type="text" placeholder="E.g., city or URL" class="border rounded p-2 w-full mb-2">
+                <div class="flex gap-2 mb-2">
+                    <label><input type="checkbox" id="addLogging" class="mr-1"> Add Logging</label>
+                    <label><input type="checkbox" id="addEmail" class="mr-1"> Add Email</label>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="prevWizardStep()" class="flex-1 bg-gray-600 text-white p-2 rounded hover:bg-gray-700">Back</button>
+                    <button onclick="createBotFromWizard()" class="flex-1 bg-purple-600 text-white p-2 rounded hover:bg-purple-700 flex justify-center items-center">
+                        <span id="wizardSpinner" class="hidden spinner mr-2"></span>Create
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
-// Edit bot code
-async function editBot(botId) {
-const bot = bots.find(b => b.id === botId);
-const newCode = prompt('Edit code:', bot.code);
-if (newCode) {
-const updatedBot = { ...bot, code: newCode, status: 'Updated' };
-await botDB.put('bots', updatedBot);
-bots = bots.map(b => b.id === botId ? updatedBot : b);
-renderBots();
-const user = auth.currentUser;
-await db.collection('logs').add({
-userId: user.uid,
-email: user.email,
-input: Edited code for ${bot.name},
-response: Unified AI: ${bot.name} code updated,
-timestamp: firebase.firestore.FieldValue.serverTimestamp()
-});
-loadLogs(user.uid);
-}
-}
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+    <!-- IndexedDB -->
+    <script src="https://cdn.jsdelivr.net/npm/idb@7.0.1/build/iife/index-min.js"></script>
 
-// Copy bot code
-function copyCode(botId) {
-const bot = bots.find(b => b.id === botId);
-navigator.clipboard.writeText(bot.code);
-showMessage('Code copied to clipboard!');
-}
+    <script>
+        // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+        const firebaseConfig = {
+            apiKey: "AIzaSyBONwaRl23VeTJISmiQ3X-t3y6FGK7Ngjc",
+            authDomain: "tglsmarthub.firebaseapp.com",
+            projectId: "tglsmarthub",
+            storageBucket: "tglsmarthub.firebasestorage.app",
+            messagingSenderId: "361291241205",
+            appId: "1:361291241205:web:854f79a0238e6e4795d7bc",
+            measurementId: "G-LQ4BP8GG37"
+        };
 
-// Add function to bot
-async function addFunction(botId) {
-const bot = bots.find(b => b.id === botId);
-const func = prompt('Add function (e.g., logging, email):');
-if (func) {
-let newCode = bot.code;
-if (func.toLowerCase() === 'logging') {
-newCode += def log_activity(message):     with open('bot.log', 'a') as f:         f.write(f"{message}\\n")     print(f"Logged: {message}");
-} else if (func.toLowerCase() === 'email') {
-newCode += def send_email(subject, body, recipient):     print(f"Sending email to {recipient}: {subject}");
-}
-const updatedBot = { ...bot, code: newCode, status: 'Updated' };
-await botDB.put('bots', updatedBot);
-bots = bots.map(b => b.id === botId ? updatedBot : b);
-renderBots();
-const user = auth.currentUser;
-await db.collection('logs').add({
-userId: user.uid,
-email: user.email,
-input: Added ${func} to ${bot.name},
-response: Unified AI: Added ${func} function to ${bot.name},
-timestamp: firebase.firestore.FieldValue.serverTimestamp()
-});
-loadLogs(user.uid);
-}
-}
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
 
-// Check for idle bots
-function checkIdleBots() {
-const idleBots = bots.filter(b => b.status === 'Idle').map(b => b.name).join(', ');
-if (idleBots) {
-document.getElementById('chatArea').innerHTML += <p class="text-purple-600"><b>Unified AI:</b> Idle bots: ${idleBots}. Deploy them?</p>;
-}
-}
+        // IndexedDB for bots
+        let botDB;
+        async function initBotDB() {
+            botDB = await idb.openDB('bot-hub', 1, {
+                upgrade(db) {
+                    db.createObjectStore('bots', { keyPath: 'id', autoIncrement: true });
+                }
+            });
+        }
+        initBotDB();
 
-// Load user logs
-async function loadLogs(userId) {
-const logsDiv = document.getElementById('logs');
-logsDiv.innerHTML = '';
-allUserLogs = [];
-const querySnapshot = await db.collection('logs')
-.where('userId', '==', userId)
-.orderBy('timestamp', 'desc')
-.get();
-querySnapshot.forEach(doc => {
-const log = doc.data();
-allUserLogs.push(log);
-logsDiv.innerHTML += `<div class="log-entry p-2">
+        // Unified AI state
+        let conversationHistory = [];
+        let allUserLogs = [];
+        let bots = [];
+        let isDarkMode = false;
 
-<p class="text-sm text-gray-500"><b>${log.email}</b> (${new Date(log.timestamp?.toDate()).toLocaleString()}):</p> <p><b>You:</b> ${log.input}</p> <p><b>AI:</b> ${log.response}</p> </div>`; }); }
-// Search logs
-function searchLogs() {
-const searchTerm = document.getElementById('logSearch').value.toLowerCase();
-const logsDiv = document.getElementById('logs');
-logsDiv.innerHTML = '';
-allUserLogs
-.filter(log => log.input.toLowerCase().includes(searchTerm) || log.response.toLowerCase().includes(searchTerm))
-.forEach(log => {
-logsDiv.innerHTML += `<div class="log-entry p-2">
+        // Check user state
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                document.getElementById('login').classList.add('hidden');
+                document.getElementById('hub').classList.remove('hidden');
+                document.getElementById('userEmail').textContent = user.email;
+                loadBots();
+                loadLogs(user.uid);
+                checkBossAccess(user.email);
+                showToast(`Welcome, ${user.email}!`, 'success');
+                document.getElementById('chatArea').innerHTML += `<p class="text-purple-600"><b>Unified AI:</b> Yo, ${user.email}! I’m the brain of this hub. Build a bot, check statuses, or just vibe!</p>`;
+                checkIdleBots();
+                startStatusPolling();
+            } else {
+                document.getElementById('login').classList.remove('hidden');
+                document.getElementById('hub').classList.add('hidden');
+                document.getElementById('chatArea').innerHTML = '';
+                stopStatusPolling();
+            }
+        });
 
-<p class="text-sm text-gray-500"><b>${log.email}</b> (${new Date(log.timestamp?.toDate()).toLocaleString()}):</p> <p><b>You:</b> ${log.input}</p> <p><b>AI:</b> ${log.response}</p> </div>`; }); }
-// Load all logs (boss view)
-async function loadAllLogs() {
-const allLogsDiv = document.getElementById('allLogs');
-allLogsDiv.innerHTML = '';
-const querySnapshot = await db.collection('logs')
-.orderBy('timestamp', 'desc')
-.get();
-querySnapshot.forEach(doc => {
-const log = doc.data();
-allLogsDiv.innerHTML += `<div class="log-entry p-2">
+        // Validate email format
+        function isValidEmail(email) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            return emailRegex.test(email);
+        }
 
-<p class="text-sm text-gray-500"><b>${log.email}</b> (${new Date(log.timestamp?.toDate()).toLocaleString()}):</p> <p><b>User:</b> ${log.input}</p> <p><b>AI:</b> ${log.response}</p> </div>`; }); }
-// Export logs as CSV
-function exportLogs() {
-const csv = allUserLogs.map(log => "${log.email}","${log.timestamp?.toDate().toISOString()}","${log.input.replace(/"/g, '""')}","${log.response.replace(/"/g, '""')}").join('\n');
-const blob = new Blob([Email,Timestamp,Input,Response\n${csv}], { type: 'text/csv' });
-const url = URL.createObjectURL(blob);
-const a = document.createElement('a');
-a.href = url;
-a.download = 'logs.csv';
-a.click();
-URL.revokeObjectURL(url);
-}
+        // Sign Up
+        async function signUp() {
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+            const spinner = document.getElementById('signupSpinner');
+            spinner.classList.remove('hidden');
+            if (!email || !password) {
+                showToast('Please enter both email and password.', 'error');
+                spinner.classList.add('hidden');
+                return;
+            }
+            if (!isValidEmail(email)) {
+                showToast('Invalid email format.', 'error');
+                spinner.classList.add('hidden');
+                return;
+            }
+            if (password.length < 6) {
+                showToast('Password must be at least 6 characters.', 'error');
+                spinner.classList.add('hidden');
+                return;
+            }
+            try {
+                await auth.createUserWithEmailAndPassword(email, password);
+                showToast('Signed up! Logging you in...', 'success');
+            } catch (error) {
+                showToast(error.message, 'error');
+            }
+            spinner.classList.add('hidden');
+        }
 
-// Show temporary message
-function showMessage(msg) {
-const errorDiv = document.getElementById('error');
-errorDiv.textContent = msg;
-setTimeout(() => errorDiv.textContent = '', 3000);
-}
+        // Sign In
+        async function signIn() {
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+            const spinner = document.getElementById('loginSpinner');
+            spinner.classList.remove('hidden');
+            if (!email || !password) {
+                showToast('Please enter both email and password.', 'error');
+                spinner.classList.add('hidden');
+                return;
+            }
+            if (!isValidEmail(email)) {
+                showToast('Invalid email format.', 'error');
+                spinner.classList.add('hidden');
+                return;
+            }
+            try {
+                await auth.signInWithEmailAndPassword(email, password);
+                showToast('Logged in!', 'success');
+            } catch (error) {
+                showToast(error.message, 'error');
+            }
+            spinner.classList.add('hidden');
+        }
 
-// Service Worker registration
-if ('serviceWorker' in navigator) {
-window.addEventListener('load', () => {
-navigator.serviceWorker.register('/service-worker.js', { scope: '/' })
-.then(registration => {
-console.log('Service Worker Registered:', registration.scope);
-showMessage('Service Worker registered successfully!');
-})
-.catch(err => {
-console.error('Service Worker Registration Failed:', err);
-showMessage(Service Worker failed: ${err.message || err});
-});
-});
-} else {
-console.warn('Service Workers not supported in this browser.');
-showMessage('Service Workers not supported in this browser.');
-}
-</script>
+        // Sign Out
+        function signOut() {
+            auth.signOut().then(() => showToast('Logged out!', 'success'));
+        }
 
-</body> </html>
+        // Check if user is "boss"
+        function checkBossAccess(email) {
+            const bossEmails = ['boss@example.com']; // Update with real boss emails
+            if (bossEmails.includes(email)) {
+                document.getElementById('bossArea').classList.remove('hidden');
+                loadAllLogs();
+            } else {
+                document.getElementById('bossArea').classList.add('hidden');
+            }
+        }
+
+        // Unified AI Logic
+        async function getAIResponse(input) {
+            const lowerInput = input.toLowerCase();
+            let response;
+
+            // Hub queries
+            if (lowerInput.includes('hub') || lowerInput.includes('status') || lowerInput.includes('bots')) {
+                const runningBots = bots.filter(b => b.status === 'Running').map(b => b.name).join(', ');
+                response = lowerInput.includes('running')
+                    ? `Running bots: ${runningBots || 'None'}`
+                    : `Hub status: ${bots.length} bots, ${allUserLogs.length} logs. Ask for details!`;
+            }
+            // Bot-building
+            else if (lowerInput.includes('build') || lowerInput.includes('create') || lowerInput.includes('bot')) {
+                if (lowerInput.includes('weather')) {
+                    response = await generateWeatherBot(input);
+                } else if (lowerInput.includes('scraper')) {
+                    response = await generateScraperBot(input);
+                } else {
+                    response = 'What kind of bot? Try the Bot Wizard for guided creation!';
+                }
+            }
+            // General conversation
+            else {
+                response = conversationHistory.includes(input)
+                    ? `Yo, you said "${input}" before! Let’s switch it up—bot ideas or hub status?`
+                    : `Cool, "${input}"? Wanna talk bots, hub, or keep vibing?`;
+            }
+
+            conversationHistory.push(input);
+            if (lowerInput.includes('weather') && !conversationHistory.some(h => h.includes('dashboard'))) {
+                response += ' Frequent weather bots detected. Add a Weather Dashboard?';
+            }
+            return response;
+        }
+
+        // Generate Weather Bot
+        async function generateWeatherBot(input, params = {}, functions = []) {
+            let code = `import requests
+# Fetches weather data for a city
+def fetch_weather(city):
+    try:
+        url = f"https://api.weatherapi.com/v1/current.json?key=YOUR_KEY&q={city}"
+        response = requests.get(url)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            raise Exception("API request failed")
+    except Exception as e:
+        print(f"Error: {e}")
+        return None
+`;
+            if (functions.includes('logging')) {
+                code += `
+def log_activity(message):
+    with open('bot.log', 'a') as f:
+        f.write(f"{message}\\n")
+    print(f"Logged: {message}")
+`;
+            }
+            if (functions.includes('email')) {
+                code += `
+def send_email(subject, body, recipient):
+    print(f"Sending email to {recipient}: {subject}")
+`;
+            }
+            const bot = {
+                id: Date.now(),
+                name: params.name || 'Weather Bot',
+                code,
+                description: `Fetches current weather for ${params.city || 'a city'}.`,
+                status: 'Idle',
+                performance: 80
+            };
+            await botDB.add('bots', bot);
+            bots.push(bot);
+            renderBots();
+            return `Created ${bot.name} for "${input}". City: ${params.city || 'any'}. Status: ${bot.status}`;
+        }
+
+        // Generate Scraper Bot
+        async function generateScraperBot(input, params = {}, functions = []) {
+            let code = `import requests
+from bs4 import BeautifulSoup
+# Scrapes a website for data
+def scrape_website(url):
+    try:
+        response = requests.get(url)
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, 'html.parser')
+            data = [p.text for p in soup.find_all('p')]
+            return data
+        else:
+            raise Exception("Failed to fetch website")
+    except Exception as e:
+        print(f"Error: {e}")
+        return None
+`;
+            if (functions.includes('logging')) {
+                code += `
+def log_activity(message):
+    with open('bot.log', 'a') as f:
+        f.write(f"{message}\\n")
+    print(f"Logged: {message}")
+`;
+            }
+            if (functions.includes('email')) {
+                code += `
+def send_email(subject, body, recipient):
+    print(f"Sending email to {recipient}: {subject}")
+`;
+            }
+            const bot = {
+                id: Date.now(),
+                name: params.name || 'Scraper Bot',
+                code,
+                description: `Scrapes paragraphs from ${params.url || 'a website'}.`,
+                status: 'Idle',
+                performance: 75 Sexually explicit content warning: none
+
+System: Here's the continuation of the enhanced `index.html` code with the remaining interactive features, unified AI, and Firebase configuration as requested:
+
+```html
+        // Send message to Unified AI
+        async function sendMessage() {
+            const input = document.getElementById('userInput').value.trim();
+            if (!input) {
+                showToast('Type something to chat with the Unified AI!', 'error');
+                return;
+            }
+            const user = auth.currentUser;
+            if (!user) {
+                showToast('Please log in to chat.', 'error');
+                return;
+            }
+
+            const chatArea = document.getElementById('chatArea');
+            chatArea.innerHTML += `<p class="text-gray-800"><b>You:</b> ${input}</p>`;
+            const response = await getAIResponse(input);
+            chatArea.innerHTML += `<p class="text-purple-600"><b>Unified AI:</b> ${response}</p>`;
+            chatArea.scrollTop = chatArea.scrollHeight;
+
+            await db.collection('logs').add({
+                userId: user.uid,
+                email: user.email,
+                input: input,
+                response: response,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            loadLogs(user.uid);
+            document.getElementById('userInput').value = '';
+        }
+
+        // Load bots from IndexedDB
+        async function loadBots() {
+            bots = await botDB.getAll('bots');
+            renderBots();
+        }
+
+        // Render bots with swipe gestures
+        function renderBots() {
+            const botsDiv = document.getElementById('bots');
+            botsDiv.innerHTML = '';
+            bots.forEach(bot => {
+                const botDiv = document.createElement('div');
+                botDiv.className = 'p-2 bg-gray-50 rounded swipeable';
+                botDiv.innerHTML = `
+                    <p><b>${bot.name}</b> (<span class="bot-status">${bot.status}</span>, Perf: ${bot.performance}%)</p>
+                    <p class="text-sm text-gray-500">${bot.description}</p>
+                    <pre class="text-sm bg-white p-2 rounded mt-1">${bot.code}</pre>
+                    <select onchange="sendCommand(${bot.id}, this.value)" class="border rounded p-1 w-full mt-1">
+                        <option value="">Command</option>
+                        <option value="Start">Start</option>
+                        <option value="Stop">Stop</option>
+                        <option value="Restart">Restart</option>
+                    </select>
+                    <button onclick="editBot(${bot.id})" class="bg-yellow-500 text-white p-1 rounded w-full mt-1 hover:bg-yellow-600">Edit Code</button>
+                    <button onclick="copyCode(${bot.id})" class="bg-gray-500 text-white p-1 rounded w-full mt-1 hover:bg-gray-600">Copy Code</button>
+                    <button onclick="addFunction(${bot.id})" class="bg-blue-500 text-white p-1 rounded w-full mt-1 hover:bg-blue-600">Add Function</button>
+                `;
+                // Swipe gestures
+                let touchStartX = 0;
+                botDiv.addEventListener('touchstart', e => {
+                    touchStartX = e.changedTouches[0].screenX;
+                });
+                botDiv.addEventListener('touchend', e => {
+                    const touchEndX = e.changedTouches[0].screenX;
+                    const diffX = touchStartX - touchEndX;
+                    botDiv.classList.remove('swipe-left', 'swipe-right');
+                    if (diffX > 50) {
+                        deleteBot(bot.id);
+                    } else if (diffX < -50) {
+                        editBot(bot.id);
+                    }
+                });
+                botsDiv.appendChild(botDiv);
+            });
+        }
+
+        // Send bot command
+        async function sendCommand(botId, cmd) {
+            if (!cmd) return;
+            const bot = bots.find(b => b.id === botId);
+            const newStatus = cmd === 'Start' ? 'Running' : cmd === 'Stop' ? 'Idle' : 'Restarting';
+            const updatedBot = { ...bot, status: newStatus, performance: Math.min(100, bot.performance + 5) };
+            await botDB.put('bots', updatedBot);
+            bots = bots.map(b => b.id === botId ? updatedBot : b);
+            renderBots();
+            const user = auth.currentUser;
+            await db.collection('logs').add({
+                userId: user.uid,
+                email: user.email,
+                input: `Command ${cmd} for ${bot.name}`,
+                response: `Unified AI: ${bot.name} status updated to ${newStatus}`,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            showToast(`${bot.name} ${cmd}ed!`, 'success');
+            loadLogs(user.uid);
+        }
+
+        // Send global command
+        async function sendGlobalCommand() {
+            const cmd = document.getElementById('globalCommand').value;
+            if (!cmd) {
+                showToast('Select a global command!', 'error');
+                return;
+            }
+            const newStatus = cmd === 'Start All' ? 'Running' : cmd === 'Stop All' ? 'Idle' : 'Restarting';
+            const updatedBots = bots.map(bot => ({ ...bot, status: newStatus, performance: Math.min(100, bot.performance + 5) }));
+            for (const bot of updatedBots) {
+                await botDB.put('bots', bot);
+            }
+            bots = updatedBots;
+            renderBots();
+            const user = auth.currentUser;
+            await db.collection('logs').add({
+                userId: user.uid,
+                email: user.email,
+                input: `Global command: ${cmd}`,
+                response: `Unified AI: All bots updated to ${newStatus}`,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            showToast(`Global ${cmd} executed!`, 'success');
+            loadLogs(user.uid);
+            document.getElementById('globalCommand').value = '';
+        }
+
+        // Edit bot code
+        async function editBot(botId) {
+            const bot = bots.find(b => b.id === botId);
+            const newCode = prompt('Edit code:', bot.code);
+            if (newCode) {
+                const updatedBot = { ...bot, code: newCode, status: 'Updated' };
+                await botDB.put('bots', updatedBot);
+                bots = bots.map(b => b.id === botId ? updatedBot : b);
+                renderBots();
+                const user = auth.currentUser;
+                await db.collection('logs').add({
+                    userId: user.uid,
+                    email: user.email,
+                    input: `Edited code for ${bot.name}`,
+                    response: `Unified AI: ${bot.name} code updated`,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                showToast(`${bot.name} code updated!`, 'success');
+                loadLogs(user.uid);
+            }
+        }
+
+        // Delete bot
+        async function deleteBot(botId) {
+            const bot = bots.find(b => b.id === botId);
+            await botDB.delete('bots', botId);
+            bots = bots.filter(b => b.id !== botId);
+            renderBots();
+            const user = auth.currentUser;
+            await db.collection('logs').add({
+                userId: user.uid,
+                email: user.email,
+                input: `Deleted ${bot.name}`,
+                response: `Unified AI: ${bot.name} deleted`,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            showToast(`${bot.name} deleted!`, 'success');
+            loadLogs(user.uid);
+        }
+
+        // Copy bot code
+        function copyCode(botId) {
+            const bot = bots.find(b => b.id === botId);
+            navigator.clipboard.writeText(bot.code);
+            showToast('Code copied to clipboard!', 'success');
+        }
+
+        // Add function to bot
+        async function addFunction(botId) {
+            const bot = bots.find(b => b.id === botId);
+            const func = prompt('Add function (e.g., logging, email):');
+            if (func) {
+                let newCode = bot.code;
+                if (func.toLowerCase() === 'logging') {
+                    newCode += `
+def log_activity(message):
+    with open('bot.log', 'a') as f:
+        f.write(f"{message}\\n")
+    print(f"Logged: {message}")
+`;
+                } else if (func.toLowerCase() === 'email') {
+                    newCode += `
+def send_email(subject, body, recipient):
+    print(f"Sending email to {recipient}: {subject}")
+`;
+                }
+                const updatedBot = { ...bot, code: newCode, status: 'Updated' };
+                await botDB.put('bots', updatedBot);
+                bots = bots.map(b => b.id === botId ? updatedBot : b);
+                renderBots();
+                const user = auth.currentUser;
+                await db.collection('logs').add({
+                    userId: user.uid,
+                    email: user.email,
+                    input: `Added ${func} to ${bot.name}`,
+                    response: `Unified AI: Added ${func} function to ${bot.name}`,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                showToast(`Added ${func} to ${bot.name}!`, 'success');
+                loadLogs(user.uid);
+            }
+        }
+
+        // Bot Creation Wizard
+        function openWizard() {
+            document.getElementById('wizardModal').style.display = 'block';
+            document.getElementById('wizardStep1').style.display = 'block';
+            document.getElementById('wizardStep2').style.display = 'none';
+            document.getElementById('botType').value = '';
+        }
+
+        function nextWizardStep() {
+            const botType = document.getElementById('botType').value;
+            if (!botType) {
+                showToast('Select a bot type!', 'error');
+                return;
+            }
+            document.getElementById('wizardStep1').style.display = 'none';
+            document.getElementById('wizardStep2').style.display = 'block';
+            document.getElementById('botParams').value = '';
+            document.getElementById('addLogging').checked = false;
+            document.getElementById('addEmail').checked = false;
+        }
+
+        function prevWizardStep() {
+            document.getElementById('wizardStep1').style.display = 'block';
+            document.getElementById('wizardStep2').style.display = 'none';
+        }
+
+        async function createBotFromWizard() {
+            const botType = document.getElementById('botType').value;
+            const params = document.getElementById('botParams').value.trim();
+            const addLogging = document.getElementById('addLogging').checked;
+            const addEmail = document.getElementById('addEmail').checked;
+            const functions = [];
+            if (addLogging) functions.push('logging');
+            if (addEmail) functions.push('email');
+            const spinner = document.getElementById('wizardSpinner');
+            spinner.classList.remove('hidden');
+
+            if (!params) {
+                showToast('Enter bot parameters!', 'error');
+                spinner.classList.add('hidden');
+                return;
+            }
+
+            const user = auth.currentUser;
+            let response;
+            if (botType === 'weather') {
+                response = await generateWeatherBot(`create weather bot for ${params}`, { city: params, name: `Weather Bot (${params})` }, functions);
+            } else if (botType === 'scraper') {
+                response = await generateScraperBot(`create scraper bot for ${params}`, { url: params, name: `Scraper Bot (${params})` }, functions);
+            }
+            document.getElementById('wizardModal').style.display = 'none';
+            document.getElementById('chatArea').innerHTML += `<p class="text-gray-800"><b>You:</b> Create ${botType} bot for ${params}</p>`;
+            document.getElementById('chatArea').innerHTML += `<p class="text-purple-600"><b>Unified AI:</b> ${response}</p>`;
+            document.getElementById('chatArea').scrollTop = chatArea.scrollHeight;
+
+            await db.collection('logs').add({
+                userId: user.uid,
+                email: user.email,
+                input: `Created ${botType} bot for ${params}`,
+                response: response,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            showToast(`Created ${botType} bot!`, 'success');
+            loadLogs(user.uid);
+            spinner.classList.add('hidden');
+        }
+
+        // Check for idle bots
+        function checkIdleBots() {
+            const idleBots = bots.filter(b => b.status === 'Idle').map(b => b.name).join(', ');
+            if (idleBots) {
+                document.getElementById('chatArea').innerHTML += `<p class="text-purple-600"><b>Unified AI:</b> Idle bots: ${idleBots}. Deploy them?</p>`;
+            }
+        }
+
+        // Simulated real-time status updates
+        let pollingInterval;
+        function startStatusPolling() {
+            pollingInterval = setInterval(() => {
+                bots = bots.map(bot => {
+                    if (bot.status === 'Running' && Math.random() < 0.1) {
+                        return { ...bot, status: 'Idle', performance: Math.max(50, bot.performance - 5) };
+                    }
+                    return bot;
+                });
+                renderBots();
+            }, 10000);
+        }
+
+        function stopStatusPolling() {
+            clearInterval(pollingInterval);
+        }
+
+        // Load user logs
+        async function loadLogs(userId) {
+            const logsDiv = document.getElementById('logs');
+            logsDiv.innerHTML = '';
+            allUserLogs = [];
+            const querySnapshot = await db.collection('logs')
+                .where('userId', '==', userId)
+                .orderBy('timestamp', 'desc')
+                .get();
+            querySnapshot.forEach(doc => {
+                const log = doc.data();
+                allUserLogs.push(log);
+            });
+            searchLogs();
+        }
+
+        // Search and filter logs
+        function searchLogs() {
+            const searchTerm = document.getElementById('logSearch').value.toLowerCase();
+            const filter = document.getElementById('logFilter').value;
+            const logsDiv = document.getElementById('logs');
+            logsDiv.innerHTML = '';
+            const now = new Date();
+            allUserLogs
+                .filter(log => {
+                    const logDate = log.timestamp?.toDate();
+                    if (filter === 'today') {
+                        return logDate && logDate.toDateString() === now.toDateString();
+                    } else if (filter === 'week') {
+                        const oneWeekAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
+                        return logDate && logDate >= oneWeekAgo;
+                    }
+                    return true;
+                })
+                .filter(log => log.input.toLowerCase().includes(searchTerm) || log.response.toLowerCase().includes(searchTerm))
+                .forEach(log => {
+                    logsDiv.innerHTML += `<div class="log-entry p-2">
+                        <p class="text-sm text-gray-500"><b>${log.email}</b> (${new Date(log.timestamp?.toDate()).toLocaleString()}):</p>
+                        <p><b>You:</b> ${log.input}</p>
+                        <p><b>AI:</b> ${log.response}</p>
+                    </div>`;
+                });
+        }
+
+        // Load all logs (boss view)
+        async function loadAllLogs() {
+            const allLogsDiv = document.getElementById('allLogs');
+            allLogsDiv.innerHTML = '';
+            const querySnapshot = await db.collection('logs')
+                .orderBy('timestamp', 'desc')
+                .get();
+            querySnapshot.forEach(doc => {
+                const log = doc.data();
+                allLogsDiv.innerHTML += `<div class="log-entry p-2">
+                    <p class="text-sm text-gray-500"><b>${log.email}</b> (${new Date(log.timestamp?.toDate()).toLocaleString()}):</p>
+                    <p><b>User:</b> ${log.input}</p>
+                    <p><b>AI:</b> ${log.response}</p>
+                </div>`;
+            });
+        }
+
+        // Export logs as CSV
+        function exportLogs() {
+            const csv = allUserLogs.map(log => `"${log.email}","${log.timestamp?.toDate().toISOString()}","${log.input.replace(/"/g, '""')}","${log.response.replace(/"/g, '""')}"`).join('\n');
+            const blob = new Blob([`Email,Timestamp,Input,Response\n${csv}`], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'logs.csv';
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('Logs exported as CSV!', 'success');
+        }
+
+        // Show toast notification
+        function showToast(message, type) {
+            const toast = document.createElement('div');
+            toast.className = `toast p-4 rounded shadow-lg ${type === 'success' ? 'bg-green-500' : 'bg-red-500'} text-white animate-slide-in`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.add('animate-slide-out');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // Toggle theme
+        function toggleTheme() {
+            isDarkMode = !isDarkMode;
+            document.body.classList.toggle('dark', isDarkMode);
+            showToast(`Switched to ${isDarkMode ? 'dark' : 'light'} mode!`, 'success');
+        }
+
+        // Service Worker registration
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js', { scope: '/' })
+                    .then(registration => {
+                        console.log('Service Worker Registered:', registration.scope);
+                        showToast('Service Worker registered!', 'success');
+                    })
+                    .catch(err => {
+                        console.error('Service Worker Registration Failed:', err);
+                        showToast(`Service Worker failed: ${err.message || err}`, 'error');
+                    });
+            });
+        } else {
+            showToast('Service Workers not supported.', 'error');
+        }
+    </script>
+</body>
+</html>
