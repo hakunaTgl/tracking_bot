@@ -7,6 +7,7 @@
     <title>Smart Bot Hub</title>
     <link rel="manifest" href="/manifest.json">
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.min.js"></script>
     <style>
         #chatArea { max-height: 300px; overflow-y: auto; }
         .log-entry { border-bottom: 1px solid #e5e7eb; }
@@ -14,47 +15,63 @@
         .swipeable { touch-action: pan-y; }
         .swipe-left { transform: translateX(-100px); transition: transform 0.3s; }
         .swipe-right { transform: translateX(100px); transition: transform 0.3s; }
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 100; }
-        .modal-content { background: white; margin: 15% auto; padding: 20px; width: 80%; max-width: 400px; border-radius: 8px; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 100; animation: fadeIn 0.3s; }
+        .modal-content { background: white; margin: 10% auto; padding: 20px; width: 90%; max-width: 400px; border-radius: 8px; }
         .dark { background: #1f2937; color: #f9fafb; }
         .dark .bg-white { background: #374151; }
         .dark .bg-gray-50 { background: #4b5563; }
         .dark .text-gray-800 { color: #d1d5db; }
         .dark .text-purple-600 { color: #a78bfa; }
         .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #6200ea; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
+        .sticky-header { position: sticky; top: 0; z-index: 10; }
+        .tooltip { position: relative; }
+        .tooltip:hover::after { content: attr(data-tooltip); position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
     </style>
 </head>
-<body class="bg-gray-100 transition-colors duration-300">
-    <div class="max-w-md mx-auto bg-white p-6 rounded-lg shadow-md mt-4">
-        <div class="flex justify-between mb-4">
+<body class="bg-gray-100 transition-colors duration-300 min-w-[360px]">
+    <div class="sticky-header bg-white dark:bg-gray-800 p-4 shadow-md">
+        <div class="max-w-md mx-auto flex justify-between items-center">
             <h1 class="text-2xl font-bold">Smart Bot Hub</h1>
-            <button onclick="toggleTheme()" class="text-purple-600">Toggle Theme</button>
+            <button onclick="toggleTheme()" class="text-purple-600 dark:text-purple-400">Toggle Theme</button>
         </div>
+    </div>
+    <div class="max-w-md mx-auto bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md mt-4">
         <div id="login" class="space-y-4">
             <h2 class="text-2xl font-bold text-center">Login</h2>
             <input type="email" id="email" placeholder="Email" class="border rounded p-2 w-full">
             <input type="password" id="password" placeholder="Password" class="border rounded p-2 w-full">
-            <button onclick="signIn()" class="bg-purple-600 text-white p-2 rounded w-full hover:bg-purple-700 flex justify-center items-center">
+            <button onclick="signIn()" class="bg-purple-600 text-white p-2 rounded w-full hover:bg-purple-700 flex justify-center items-center" data-tooltip="Sign in to your account">
                 <span id="loginSpinner" class="hidden spinner mr-2"></span>Login
             </button>
-            <button onclick="signUp()" class="bg-gray-600 text-white p-2 rounded w-full hover:bg-gray-700 flex justify-center items-center">
+            <button onclick="signUp()" class="bg-gray-600 text-white p-2 rounded w-full hover:bg-gray-700 flex justify-center items-center" data-tooltip="Create a new account">
                 <span id="signupSpinner" class="hidden spinner mr-2"></span>Sign Up
             </button>
+            <button onclick="resetPassword()" class="text-purple-600 underline w-full text-center" data-tooltip="Reset your password">Forgot Password?</button>
             <p class="text-red-500 text-center" id="error"></p>
         </div>
         <div id="hub" class="space-y-4 hidden">
-            <p>Welcome, <span id="userEmail" class="font-semibold"></span>! <button onclick="signOut()" class="text-purple-600 underline">Logout</button></p>
+            <p>Welcome, <span id="userEmail" class="font-semibold"></span>! <button onclick="signOut()" class="text-purple-600 underline" data-tooltip="Sign out">Logout</button></p>
             <div class="space-y-2">
                 <h3 class="text-xl font-semibold">Unified AI</h3>
-                <p class="text-gray-600">I’m your hub’s brain—build bots, manage them, or chat!</p>
-                <input type="text" id="userInput" placeholder="Ask the Unified AI..." class="border rounded p-2 w-full">
+                <p class="text-gray-600 dark:text-gray-400">I’m your hub’s brain—build bots, manage them, or chat!</p>
                 <div class="flex gap-2">
-                    <button onclick="sendMessage()" class="flex-1 bg-purple-600 text-white p-2 rounded hover:bg-purple-700">Send</button>
-                    <button onclick="openWizard()" class="flex-1 bg-blue-600 text-white p-2 rounded hover:bg-blue-700">Bot Wizard</button>
+                    <input type="text" id="userInput" placeholder="Ask the Unified AI..." class="border rounded p-2 flex-1">
+                    <button onclick="startVoiceInput()" class="bg-gray-500 text-white p-2 rounded hover:bg-gray-600" data-tooltip="Use voice input">🎤</button>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="sendMessage()" class="flex-1 bg-purple-600 text-white p-2 rounded hover:bg-purple-700" data-tooltip="Send message to AI">Send</button>
+                    <button onclick="openWizard()" class="flex-1 bg-blue-600 text-white p-2 rounded hover:bg-blue-700" data-tooltip="Create bot with wizard">Bot Wizard</button>
                 </div>
             </div>
-            <div id="chatArea" class="p-4 bg-gray-50 rounded"></div>
+            <div id="chatArea" class="p-4 bg-gray-50 dark:bg-gray-700 rounded"></div>
+            <div class="space-y-2">
+                <h3 class="text-xl font-semibold">Bot Dashboard</h3>
+                <canvas id="performanceChart" class="w-full h-48"></canvas>
+                <button onclick="refreshStatuses()" class="bg-gray-600 text-white p-2 rounded w-full hover:bg-gray-700" data-tooltip="Refresh bot statuses">Refresh Statuses</button>
+            </div>
             <div class="space-y-2">
                 <h3 class="text-xl font-semibold">Your Bots</h3>
                 <select id="globalCommand" class="border rounded p-2 w-full">
@@ -62,8 +79,9 @@
                     <option value="Start All">Start All</option>
                     <option value="Stop All">Stop All</option>
                     <option value="Restart All">Restart All</option>
+                    <option value="Pause All">Pause All</option>
                 </select>
-                <button onclick="sendGlobalCommand()" class="bg-blue-600 text-white p-2 rounded w-full hover:bg-blue-700">Execute Global Command</button>
+                <button onclick="sendGlobalCommand()" class="bg-blue-600 text-white p-2 rounded w-full hover:bg-blue-700" data-tooltip="Execute global command">Execute Global Command</button>
                 <div id="bots" class="space-y-2"></div>
             </div>
             <div class="space-y-2">
@@ -76,11 +94,16 @@
                         <option value="week">This Week</option>
                     </select>
                 </div>
-                <button onclick="exportLogs()" class="bg-green-600 text-white p-2 rounded w-full hover:bg-green-700">Export Logs as CSV</button>
+                <button onclick="exportLogs()" class="bg-green-600 text-white p-2 rounded w-full hover:bg-green-700" data-tooltip="Export logs to CSV">Export Logs as CSV</button>
                 <div id="logs" class="space-y-2"></div>
+                <div class="flex justify-between">
+                    <button onclick="loadMoreLogs('prev')" class="bg-gray-600 text-white p-2 rounded hover:bg-gray-700 disabled:opacity-50" id="prevLogs" disabled>Previous</button>
+                    <button onclick="loadMoreLogs('next')" class="bg-gray-600 text-white p-2 rounded hover:bg-gray-700 disabled:opacity-50" id="nextLogs">Next</button>
+                </div>
             </div>
             <div id="bossArea" class="space-y-2 hidden">
                 <h3 class="text-xl font-semibold">Boss View: All Logs</h3>
+                <input type="text" id="bossUserFilter" placeholder="Filter by email..." class="border rounded p-2 w-full" oninput="loadAllLogs()">
                 <div id="allLogs" class="space-y-2"></div>
             </div>
         </div>
@@ -96,16 +119,25 @@
                     <option value="">Select Type</option>
                     <option value="weather">Weather Bot</option>
                     <option value="scraper">Web Scraper</option>
+                    <option value="twitter">Twitter Scraper</option>
                 </select>
                 <button onclick="nextWizardStep()" class="bg-purple-600 text-white p-2 rounded w-full hover:bg-purple-700">Next</button>
             </div>
             <div id="wizardStep2" class="hidden">
                 <p class="mb-2">Enter parameters:</p>
-                <input id="botParams" type="text" placeholder="E.g., city or URL" class="border rounded p-2 w-full mb-2">
+                <input id="botParams" type="text" placeholder="E.g., city, URL, or hashtag" class="border rounded p-2 w-full mb-2">
                 <div class="flex gap-2 mb-2">
                     <label><input type="checkbox" id="addLogging" class="mr-1"> Add Logging</label>
                     <label><input type="checkbox" id="addEmail" class="mr-1"> Add Email</label>
                 </div>
+                <div class="flex gap-2">
+                    <button onclick="prevWizardStep()" class="flex-1 bg-gray-600 text-white p-2 rounded hover:bg-gray-700">Back</button>
+                    <button onclick="previewBot()" class="flex-1 bg-blue-600 text-white p-2 rounded hover:bg-blue-700">Preview</button>
+                </div>
+            </div>
+            <div id="wizardStep3" class="hidden">
+                <p class="mb-2">Preview Bot Code:</p>
+                <pre id="botPreview" class="text-sm bg-gray-100 p-2 rounded mb-2"></pre>
                 <div class="flex gap-2">
                     <button onclick="prevWizardStep()" class="flex-1 bg-gray-600 text-white p-2 rounded hover:bg-gray-700">Back</button>
                     <button onclick="createBotFromWizard()" class="flex-1 bg-purple-600 text-white p-2 rounded hover:bg-purple-700 flex justify-center items-center">
@@ -139,6 +171,7 @@
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
         const db = firebase.firestore();
+        db.enablePersistence().catch(err => console.error('Firestore offline persistence failed:', err));
 
         // IndexedDB for bots
         let botDB;
@@ -151,11 +184,14 @@
         }
         initBotDB();
 
-        // Unified AI state
+        // State
         let conversationHistory = [];
         let allUserLogs = [];
         let bots = [];
         let isDarkMode = false;
+        let logPage = 0;
+        const logsPerPage = 10;
+        let chart;
 
         // Check user state
         auth.onAuthStateChanged(user => {
@@ -167,14 +203,16 @@
                 loadLogs(user.uid);
                 checkBossAccess(user.email);
                 showToast(`Welcome, ${user.email}!`, 'success');
-                document.getElementById('chatArea').innerHTML += `<p class="text-purple-600"><b>Unified AI:</b> Yo, ${user.email}! I’m the brain of this hub. Build a bot, check statuses, or just vibe!</p>`;
+                document.getElementById('chatArea').innerHTML += `<p class="text-purple-600"><b>Unified AI:</b> Yo, ${user.email}! I’m your hub’s brain. Build a bot, check statuses, or vibe!</p>`;
                 checkIdleBots();
                 startStatusPolling();
+                initChart();
             } else {
                 document.getElementById('login').classList.remove('hidden');
                 document.getElementById('hub').classList.add('hidden');
                 document.getElementById('chatArea').innerHTML = '';
                 stopStatusPolling();
+                if (chart) chart.destroy();
             }
         });
 
@@ -189,27 +227,39 @@
             const email = document.getElementById('email').value.trim();
             const password = document.getElementById('password').value;
             const spinner = document.getElementById('signupSpinner');
+            const errorDiv = document.getElementById('error');
             spinner.classList.remove('hidden');
+            errorDiv.textContent = '';
             if (!email || !password) {
-                showToast('Please enter both email and password.', 'error');
+                showToast('Enter both email and password.', 'error');
+                errorDiv.textContent = 'Enter both email and password.';
                 spinner.classList.add('hidden');
                 return;
             }
             if (!isValidEmail(email)) {
                 showToast('Invalid email format.', 'error');
+                errorDiv.textContent = 'Invalid email format.';
                 spinner.classList.add('hidden');
                 return;
             }
             if (password.length < 6) {
                 showToast('Password must be at least 6 characters.', 'error');
+                errorDiv.textContent = 'Password must be at least 6 characters.';
                 spinner.classList.add('hidden');
                 return;
             }
             try {
                 await auth.createUserWithEmailAndPassword(email, password);
                 showToast('Signed up! Logging you in...', 'success');
+                vibrate(100);
             } catch (error) {
-                showToast(error.message, 'error');
+                console.error('SignUp Error:', error.code, error.message);
+                let message = 'Sign-up failed. Try again.';
+                if (error.code === 'auth/email-already-in-use') message = 'Email already in use.';
+                else if (error.code === 'auth/invalid-email') message = 'Invalid email format.';
+                else if (error.code === 'auth/weak-password') message = 'Password too weak.';
+                showToast(message, 'error');
+                errorDiv.textContent = message;
             }
             spinner.classList.add('hidden');
         }
@@ -219,34 +269,79 @@
             const email = document.getElementById('email').value.trim();
             const password = document.getElementById('password').value;
             const spinner = document.getElementById('loginSpinner');
+            const errorDiv = document.getElementById('error');
             spinner.classList.remove('hidden');
+            errorDiv.textContent = '';
             if (!email || !password) {
-                showToast('Please enter both email and password.', 'error');
+                showToast('Enter both email and password.', 'error');
+                errorDiv.textContent = 'Enter both email and password.';
                 spinner.classList.add('hidden');
                 return;
             }
             if (!isValidEmail(email)) {
                 showToast('Invalid email format.', 'error');
+                errorDiv.textContent = 'Invalid email format.';
                 spinner.classList.add('hidden');
                 return;
             }
             try {
                 await auth.signInWithEmailAndPassword(email, password);
                 showToast('Logged in!', 'success');
+                vibrate(100);
             } catch (error) {
-                showToast(error.message, 'error');
+                console.error('SignIn Error:', error.code, error.message);
+                let message = 'Login failed. Check credentials.';
+                if (error.code === 'auth/user-not-found') message = 'User not found.';
+                else if (error.code === 'auth/wrong-password') message = 'Incorrect password.';
+                else if (error.code === 'auth/invalid-email') message = 'Invalid email format.';
+                else if (error.code === 'auth/too-many-requests') message = 'Too many attempts. Try later.';
+                showToast(message, 'error');
+                errorDiv.textContent = message;
+                document.getElementById('chatArea').innerHTML += `<p class="text-purple-600"><b>Unified AI:</b> Login failed: ${message}. Try resetting password or check email format.</p>`;
             }
             spinner.classList.add('hidden');
         }
 
+        // Reset Password
+        async function resetPassword() {
+            const email = document.getElementById('email').value.trim();
+            const errorDiv = document.getElementById('error');
+            if (!email) {
+                showToast('Enter an email to reset password.', 'error');
+                errorDiv.textContent = 'Enter an email to reset password.';
+                return;
+            }
+            if (!isValidEmail(email)) {
+                showToast('Invalid email format.', 'error');
+                errorDiv.textContent = 'Invalid email format.';
+                return;
+            }
+            try {
+                await auth.sendPasswordResetEmail(email);
+                showToast('Password reset email sent!', 'success');
+                errorDiv.textContent = 'Password reset email sent. Check your inbox.';
+                vibrate(100);
+            } catch (error) {
+                console.error('Reset Password Error:', error.code, error.message);
+                let message = 'Failed to send reset email.';
+                if (error.code === 'auth/invalid-email') message = 'Invalid email format.';
+                else if (error.code === 'auth/user-not-found') message = 'User not found.';
+                showToast(message, 'error');
+                errorDiv.textContent = message;
+            }
+        }
+
         // Sign Out
         function signOut() {
-            auth.signOut().then(() => showToast('Logged out!', 'success'));
+            auth.signOut().then(() => {
+                showToast('Logged out!', 'success');
+                vibrate(100);
+            });
         }
 
         // Check if user is "boss"
         function checkBossAccess(email) {
-            const bossEmails = ['boss@example.com']; // Update with real boss emails
+            const bossEmails = ['boss@example.com'];
             if (bossEmails.includes(email)) {
                 document.getElementById('bossArea').classList.remove('hidden');
                 loadAllLogs();
@@ -260,33 +355,32 @@
             const lowerInput = input.toLowerCase();
             let response;
 
-            // Hub queries
-            if (lowerInput.includes('hub') || lowerInput.includes('status') || lowerInput.includes('bots')) {
+            if (lowerInput.includes('login') || lowerInput.includes('sign in')) {
+                response = 'Login issues? Ensure email is valid (e.g., user@example.com) and password is 6+ chars. Try "Forgot Password" or check Firebase setup.';
+            } else if (lowerInput.includes('hub') || lowerInput.includes('status') || lowerInput.includes('bots')) {
                 const runningBots = bots.filter(b => b.status === 'Running').map(b => b.name).join(', ');
                 response = lowerInput.includes('running')
                     ? `Running bots: ${runningBots || 'None'}`
-                    : `Hub status: ${bots.length} bots, ${allUserLogs.length} logs. Ask for details!`;
-            }
-            // Bot-building
-            else if (lowerInput.includes('build') || lowerInput.includes('create') || lowerInput.includes('bot')) {
+                    : `Hub status: ${bots.length} bots, ${allUserLogs.length} logs. Try the dashboard!`;
+            } else if (lowerInput.includes('build') || lowerInput.includes('create') || lowerInput.includes('bot')) {
                 if (lowerInput.includes('weather')) {
                     response = await generateWeatherBot(input);
                 } else if (lowerInput.includes('scraper')) {
                     response = await generateScraperBot(input);
+                } else if (lowerInput.includes('twitter')) {
+                    response = await generateTwitterBot(input);
                 } else {
-                    response = 'What kind of bot? Try the Bot Wizard for guided creation!';
+                    response = 'What kind of bot? Use the Bot Wizard for guided creation!';
                 }
-            }
-            // General conversation
-            else {
+            } else {
                 response = conversationHistory.includes(input)
                     ? `Yo, you said "${input}" before! Let’s switch it up—bot ideas or hub status?`
                     : `Cool, "${input}"? Wanna talk bots, hub, or keep vibing?`;
             }
 
             conversationHistory.push(input);
-            if (lowerInput.includes('weather') && !conversationHistory.some(h => h.includes('dashboard'))) {
-                response += ' Frequent weather bots detected. Add a Weather Dashboard?';
+            if (lowerInput.includes('bot') && !conversationHistory.some(h => h.includes('dashboard'))) {
+                response += ' Frequent bot activity. Add a Bot Analytics Dashboard?';
             }
             return response;
         }
@@ -325,13 +419,15 @@ def send_email(subject, body, recipient):
                 id: Date.now(),
                 name: params.name || 'Weather Bot',
                 code,
-                description: `Fetches current weather for ${params.city || 'a city'}.`,
+                description: `Fetches weather for ${params.city || 'a city'}.`,
                 status: 'Idle',
-                performance: 80
+                performance: 80,
+                lastRun: null
             };
             await botDB.add('bots', bot);
             bots.push(bot);
             renderBots();
+            updateChart();
             return `Created ${bot.name} for "${input}". City: ${params.city || 'any'}. Status: ${bot.status}`;
         }
 
@@ -373,16 +469,64 @@ def send_email(subject, body, recipient):
                 code,
                 description: `Scrapes paragraphs from ${params.url || 'a website'}.`,
                 status: 'Idle',
-                performance: 75 Sexually explicit content warning: none
+                performance: 75,
+                lastRun: null
+            };
+            await botDB.add('bots', bot);
+            bots.push(bot);
+            renderBots();
+            updateChart();
+            return `Created ${bot.name} for "${input}". URL: ${params.url || 'any'}. Status: ${bot.status}`;
+        }
 
-System: Here's the continuation of the enhanced `index.html` code with the remaining interactive features, unified AI, and Firebase configuration as requested:
+        // Generate Twitter Bot
+        async function generateTwitterBot(input, params = {}, functions = []) {
+            let code = `import tweepy
+# Fetches tweets by hashtag
+def fetch_tweets(hashtag):
+    try:
+        client = tweepy.Client(bearer_token="YOUR_TOKEN")
+        tweets = client.search_recent_tweets(query=hashtag, max_results=10)
+        return [tweet.text for tweet in tweets.data]
+    except Exception as e:
+        print(f"Error: {e}")
+        return None
+`;
+            if (functions.includes('logging')) {
+                code += `
+def log_activity(message):
+    with open('bot.log', 'a') as f:
+        f.write(f"{message}\\n")
+    print(f"Logged: {message}")
+`;
+            }
+            if (functions.includes('email')) {
+                code += `
+def send_email(subject, body, recipient):
+    print(f"Sending email to {recipient}: {subject}")
+`;
+            }
+            const bot = {
+                id: Date.now(),
+                name: params.name || 'Twitter Bot',
+                code,
+                description: `Fetches tweets for ${params.hashtag || 'a hashtag'}.`,
+                status: 'Idle',
+                performance: 70,
+                lastRun: null
+            };
+            await botDB.add('bots', bot);
+            bots.push(bot);
+            renderBots();
+            updateChart();
+            return `Created ${bot.name} for "${input}". Hashtag: ${params.hashtag || 'any'}. Status: ${bot.status}`;
+        }
 
-```html
         // Send message to Unified AI
         async function sendMessage() {
             const input = document.getElementById('userInput').value.trim();
             if (!input) {
-                showToast('Type something to chat with the Unified AI!', 'error');
+                showToast('Type something to chat!', 'error');
                 return;
             }
             const user = auth.currentUser;
@@ -392,9 +536,9 @@ System: Here's the continuation of the enhanced `index.html` code with the remai
             }
 
             const chatArea = document.getElementById('chatArea');
-            chatArea.innerHTML += `<p class="text-gray-800"><b>You:</b> ${input}</p>`;
+            chatArea.innerHTML += `<p class="text-gray-800 dark:text-gray-200"><b>You:</b> ${input}</p>`;
             const response = await getAIResponse(input);
-            chatArea.innerHTML += `<p class="text-purple-600"><b>Unified AI:</b> ${response}</p>`;
+            chatArea.innerHTML += `<p class="text-purple-600 dark:text-purple-400"><b>Unified AI:</b> ${response}</p>`;
             chatArea.scrollTop = chatArea.scrollHeight;
 
             await db.collection('logs').add({
@@ -407,12 +551,39 @@ System: Here's the continuation of the enhanced `index.html` code with the remai
 
             loadLogs(user.uid);
             document.getElementById('userInput').value = '';
+            vibrate(50);
+        }
+
+        // Voice Input
+        function startVoiceInput() {
+            if (!('webkitSpeechRecognition' in window)) {
+                showToast('Voice input not supported in your browser.', 'error');
+                return;
+            }
+            const recognition = new webkitSpeechRecognition();
+            recognition.lang = 'en-US';
+            recognition.interimResults = false;
+            recognition.maxAlternatives = 1;
+            recognition.start();
+            recognition.onresult = event => {
+                const transcript = event.results[0][0].transcript;
+                document.getElementById('userInput').value = transcript;
+                showToast('Voice input received!', 'success');
+                vibrate(50);
+            };
+            recognition.onerror = event => {
+                showToast(`Voice input error: ${event.error}`, 'error');
+            };
+            recognition.onend = () => {
+                recognition.stop();
+            };
         }
 
         // Load bots from IndexedDB
         async function loadBots() {
             bots = await botDB.getAll('bots');
             renderBots();
+            updateChart();
         }
 
         // Render bots with swipe gestures
@@ -421,22 +592,22 @@ System: Here's the continuation of the enhanced `index.html` code with the remai
             botsDiv.innerHTML = '';
             bots.forEach(bot => {
                 const botDiv = document.createElement('div');
-                botDiv.className = 'p-2 bg-gray-50 rounded swipeable';
+                botDiv.className = 'p-2 bg-gray-50 dark:bg-gray-700 rounded swipeable';
                 botDiv.innerHTML = `
-                    <p><b>${bot.name}</b> (<span class="bot-status">${bot.status}</span>, Perf: ${bot.performance}%)</p>
-                    <p class="text-sm text-gray-500">${bot.description}</p>
-                    <pre class="text-sm bg-white p-2 rounded mt-1">${bot.code}</pre>
+                    <p><b>${bot.name}</b> (<span class="bot-status">${bot.status}</span>, Perf: ${bot.performance}%${bot.lastRun ? `, Last Run: ${new Date(bot.lastRun).toLocaleString()}` : ''})</p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">${bot.description}</p>
+                    <pre class="text-sm bg-white dark:bg-gray-800 p-2 rounded mt-1">${bot.code}</pre>
                     <select onchange="sendCommand(${bot.id}, this.value)" class="border rounded p-1 w-full mt-1">
                         <option value="">Command</option>
                         <option value="Start">Start</option>
                         <option value="Stop">Stop</option>
                         <option value="Restart">Restart</option>
+                        <option value="Pause">Pause</option>
                     </select>
-                    <button onclick="editBot(${bot.id})" class="bg-yellow-500 text-white p-1 rounded w-full mt-1 hover:bg-yellow-600">Edit Code</button>
-                    <button onclick="copyCode(${bot.id})" class="bg-gray-500 text-white p-1 rounded w-full mt-1 hover:bg-gray-600">Copy Code</button>
-                    <button onclick="addFunction(${bot.id})" class="bg-blue-500 text-white p-1 rounded w-full mt-1 hover:bg-blue-600">Add Function</button>
+                    <button onclick="editBot(${bot.id})" class="bg-yellow-500 text-white p-1 rounded w-full mt-1 hover:bg-yellow-600" data-tooltip="Edit bot code">Edit Code</button>
+                    <button onclick="copyCode(${bot.id})" class="bg-gray-500 text-white p-1 rounded w-full mt-1 hover:bg-gray-600" data-tooltip="Copy bot code">Copy Code</button>
+                    <button onclick="addFunction(${bot.id})" class="bg-blue-500 text-white p-1 rounded w-full mt-1 hover:bg-blue-600" data-tooltip="Add function to bot">Add Function</button>
                 `;
-                // Swipe gestures
                 let touchStartX = 0;
                 botDiv.addEventListener('touchstart', e => {
                     touchStartX = e.changedTouches[0].screenX;
@@ -459,11 +630,12 @@ System: Here's the continuation of the enhanced `index.html` code with the remai
         async function sendCommand(botId, cmd) {
             if (!cmd) return;
             const bot = bots.find(b => b.id === botId);
-            const newStatus = cmd === 'Start' ? 'Running' : cmd === 'Stop' ? 'Idle' : 'Restarting';
-            const updatedBot = { ...bot, status: newStatus, performance: Math.min(100, bot.performance + 5) };
+            const newStatus = cmd === 'Start' ? 'Running' : cmd === 'Stop' ? 'Idle' : cmd === 'Restart' ? 'Restarting' : 'Paused';
+            const updatedBot = { ...bot, status: newStatus, performance: Math.min(100, bot.performance + 5), lastRun: new Date().toISOString() };
             await botDB.put('bots', updatedBot);
             bots = bots.map(b => b.id === botId ? updatedBot : b);
             renderBots();
+            updateChart();
             const user = auth.currentUser;
             await db.collection('logs').add({
                 userId: user.uid,
@@ -473,6 +645,7 @@ System: Here's the continuation of the enhanced `index.html` code with the remai
                 timestamp: firebase.firestore.FieldValue.serverTimestamp()
             });
             showToast(`${bot.name} ${cmd}ed!`, 'success');
+            vibrate(50);
             loadLogs(user.uid);
         }
 
@@ -483,13 +656,14 @@ System: Here's the continuation of the enhanced `index.html` code with the remai
                 showToast('Select a global command!', 'error');
                 return;
             }
-            const newStatus = cmd === 'Start All' ? 'Running' : cmd === 'Stop All' ? 'Idle' : 'Restarting';
-            const updatedBots = bots.map(bot => ({ ...bot, status: newStatus, performance: Math.min(100, bot.performance + 5) }));
+            const newStatus = cmd === 'Start All' ? 'Running' : cmd === 'Stop All' ? 'Idle' : cmd === 'Restart All' ? 'Restarting' : 'Paused';
+            const updatedBots = bots.map(bot => ({ ...bot, status: newStatus, performance: Math.min(100, bot.performance + 5), lastRun: new Date().toISOString() }));
             for (const bot of updatedBots) {
                 await botDB.put('bots', bot);
             }
             bots = updatedBots;
             renderBots();
+            updateChart();
             const user = auth.currentUser;
             await db.collection('logs').add({
                 userId: user.uid,
@@ -499,6 +673,7 @@ System: Here's the continuation of the enhanced `index.html` code with the remai
                 timestamp: firebase.firestore.FieldValue.serverTimestamp()
             });
             showToast(`Global ${cmd} executed!`, 'success');
+            vibrate(50);
             loadLogs(user.uid);
             document.getElementById('globalCommand').value = '';
         }
@@ -508,10 +683,11 @@ System: Here's the continuation of the enhanced `index.html` code with the remai
             const bot = bots.find(b => b.id === botId);
             const newCode = prompt('Edit code:', bot.code);
             if (newCode) {
-                const updatedBot = { ...bot, code: newCode, status: 'Updated' };
+                const updatedBot = { ...bot, code: newCode, status: 'Updated', lastRun: new Date().toISOString() };
                 await botDB.put('bots', updatedBot);
                 bots = bots.map(b => b.id === botId ? updatedBot : b);
                 renderBots();
+                updateChart();
                 const user = auth.currentUser;
                 await db.collection('logs').add({
                     userId: user.uid,
@@ -521,6 +697,7 @@ System: Here's the continuation of the enhanced `index.html` code with the remai
                     timestamp: firebase.firestore.FieldValue.serverTimestamp()
                 });
                 showToast(`${bot.name} code updated!`, 'success');
+                vibrate(50);
                 loadLogs(user.uid);
             }
         }
@@ -531,6 +708,7 @@ System: Here's the continuation of the enhanced `index.html` code with the remai
             await botDB.delete('bots', botId);
             bots = bots.filter(b => b.id !== botId);
             renderBots();
+            updateChart();
             const user = auth.currentUser;
             await db.collection('logs').add({
                 userId: user.uid,
@@ -540,6 +718,7 @@ System: Here's the continuation of the enhanced `index.html` code with the remai
                 timestamp: firebase.firestore.FieldValue.serverTimestamp()
             });
             showToast(`${bot.name} deleted!`, 'success');
+            vibrate(50);
             loadLogs(user.uid);
         }
 
@@ -548,6 +727,7 @@ System: Here's the continuation of the enhanced `index.html` code with the remai
             const bot = bots.find(b => b.id === botId);
             navigator.clipboard.writeText(bot.code);
             showToast('Code copied to clipboard!', 'success');
+            vibrate(50);
         }
 
         // Add function to bot
@@ -569,10 +749,11 @@ def send_email(subject, body, recipient):
     print(f"Sending email to {recipient}: {subject}")
 `;
                 }
-                const updatedBot = { ...bot, code: newCode, status: 'Updated' };
+                const updatedBot = { ...bot, code: newCode, status: 'Updated', lastRun: new Date().toISOString() };
                 await botDB.put('bots', updatedBot);
                 bots = bots.map(b => b.id === botId ? updatedBot : b);
                 renderBots();
+                updateChart();
                 const user = auth.currentUser;
                 await db.collection('logs').add({
                     userId: user.uid,
@@ -582,6 +763,7 @@ def send_email(subject, body, recipient):
                     timestamp: firebase.firestore.FieldValue.serverTimestamp()
                 });
                 showToast(`Added ${func} to ${bot.name}!`, 'success');
+                vibrate(50);
                 loadLogs(user.uid);
             }
         }
@@ -591,7 +773,9 @@ def send_email(subject, body, recipient):
             document.getElementById('wizardModal').style.display = 'block';
             document.getElementById('wizardStep1').style.display = 'block';
             document.getElementById('wizardStep2').style.display = 'none';
+            document.getElementById('wizardStep3').style.display = 'none';
             document.getElementById('botType').value = '';
+            vibrate(50);
         }
 
         function nextWizardStep() {
@@ -605,11 +789,96 @@ def send_email(subject, body, recipient):
             document.getElementById('botParams').value = '';
             document.getElementById('addLogging').checked = false;
             document.getElementById('addEmail').checked = false;
+            vibrate(50);
         }
 
         function prevWizardStep() {
-            document.getElementById('wizardStep1').style.display = 'block';
+            if (document.getElementById('wizardStep3').style.display === 'block') {
+                document.getElementById('wizardStep3').style.display = 'none';
+                document.getElementById('wizardStep2').style.display = 'block';
+            } else {
+                document.getElementById('wizardStep2').style.display = 'none';
+                document.getElementById('wizardStep1').style.display = 'block';
+            }
+            vibrate(50);
+        }
+
+        async function previewBot() {
+            const botType = document.getElementById('botType').value;
+            const params = document.getElementById('botParams').value.trim();
+            const addLogging = document.getElementById('addLogging').checked;
+            const addEmail = document.getElementById('addEmail').checked;
+            const functions = [];
+            if (addLogging) functions.push('logging');
+            if (addEmail) functions.push('email');
+            if (!params) {
+                showToast('Enter bot parameters!', 'error');
+                return;
+            }
+            let code = '';
+            if (botType === 'weather') {
+                code = `import requests
+# Fetches weather data for a city
+def fetch_weather(city):
+    try:
+        url = f"https://api.weatherapi.com/v1/current.json?key=YOUR_KEY&q=${params}"
+        response = requests.get(url)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            raise Exception("API request failed")
+    except Exception as e:
+        print(f"Error: {e}")
+        return None
+`;
+            } else if (botType === 'scraper') {
+                code = `import requests
+from bs4 import BeautifulSoup
+# Scrapes a website for data
+def scrape_website(url):
+    try:
+        response = requests.get(url)
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, 'html.parser')
+            data = [p.text for p in soup.find_all('p')]
+            return data
+        else:
+            raise Exception("Failed to fetch website")
+    except Exception as e:
+        print(f"Error: {e}")
+        return None
+`;
+            } else if (botType === 'twitter') {
+                code = `import tweepy
+# Fetches tweets by hashtag
+def fetch_tweets(hashtag):
+    try:
+        client = tweepy.Client(bearer_token="YOUR_TOKEN")
+        tweets = client.search_recent_tweets(query=hashtag, max_results=10)
+        return [tweet.text for tweet in tweets.data]
+    except Exception as e:
+        print(f"Error: {e}")
+        return None
+`;
+            }
+            if (addLogging) {
+                code += `
+def log_activity(message):
+    with open('bot.log', 'a') as f:
+        f.write(f"{message}\\n")
+    print(f"Logged: {message}")
+`;
+            }
+            if (addEmail) {
+                code += `
+def send_email(subject, body, recipient):
+    print(f"Sending email to {recipient}: {subject}")
+`;
+            }
+            document.getElementById('botPreview').textContent = code;
             document.getElementById('wizardStep2').style.display = 'none';
+            document.getElementById('wizardStep3').style.display = 'block';
+            vibrate(50);
         }
 
         async function createBotFromWizard() {
@@ -622,25 +891,24 @@ def send_email(subject, body, recipient):
             if (addEmail) functions.push('email');
             const spinner = document.getElementById('wizardSpinner');
             spinner.classList.remove('hidden');
-
             if (!params) {
                 showToast('Enter bot parameters!', 'error');
                 spinner.classList.add('hidden');
                 return;
             }
-
             const user = auth.currentUser;
             let response;
             if (botType === 'weather') {
                 response = await generateWeatherBot(`create weather bot for ${params}`, { city: params, name: `Weather Bot (${params})` }, functions);
             } else if (botType === 'scraper') {
                 response = await generateScraperBot(`create scraper bot for ${params}`, { url: params, name: `Scraper Bot (${params})` }, functions);
+            } else if (botType === 'twitter') {
+                response = await generateTwitterBot(`create twitter bot for ${params}`, { hashtag: params, name: `Twitter Bot (${params})` }, functions);
             }
             document.getElementById('wizardModal').style.display = 'none';
-            document.getElementById('chatArea').innerHTML += `<p class="text-gray-800"><b>You:</b> Create ${botType} bot for ${params}</p>`;
-            document.getElementById('chatArea').innerHTML += `<p class="text-purple-600"><b>Unified AI:</b> ${response}</p>`;
+            document.getElementById('chatArea').innerHTML += `<p class="text-gray-800 dark:text-gray-200"><b>You:</b> Create ${botType} bot for ${params}</p>`;
+            document.getElementById('chatArea').innerHTML += `<p class="text-purple-600 dark:text-purple-400"><b>Unified AI:</b> ${response}</p>`;
             document.getElementById('chatArea').scrollTop = chatArea.scrollHeight;
-
             await db.collection('logs').add({
                 userId: user.uid,
                 email: user.email,
@@ -649,6 +917,7 @@ def send_email(subject, body, recipient):
                 timestamp: firebase.firestore.FieldValue.serverTimestamp()
             });
             showToast(`Created ${botType} bot!`, 'success');
+            vibrate(50);
             loadLogs(user.uid);
             spinner.classList.add('hidden');
         }
@@ -657,29 +926,78 @@ def send_email(subject, body, recipient):
         function checkIdleBots() {
             const idleBots = bots.filter(b => b.status === 'Idle').map(b => b.name).join(', ');
             if (idleBots) {
-                document.getElementById('chatArea').innerHTML += `<p class="text-purple-600"><b>Unified AI:</b> Idle bots: ${idleBots}. Deploy them?</p>`;
+                document.getElementById('chatArea').innerHTML += `<p class="text-purple-600 dark:text-purple-400"><b>Unified AI:</b> Idle bots: ${idleBots}. Deploy them?</p>`;
             }
         }
 
-        // Simulated real-time status updates
+        // Real-time status updates
         let pollingInterval;
         function startStatusPolling() {
             pollingInterval = setInterval(() => {
                 bots = bots.map(bot => {
-                    if (bot.status === 'Running' && Math.random() < 0.1) {
-                        return { ...bot, status: 'Idle', performance: Math.max(50, bot.performance - 5) };
+                    if (bot.status === 'Running' && Math.random() < 0.2) {
+                        return { ...bot, status: 'Idle', performance: Math.max(50, bot.performance - 5), lastRun: new Date().toISOString() };
                     }
                     return bot;
                 });
                 renderBots();
-            }, 10000);
+                updateChart();
+            }, 5000);
         }
 
         function stopStatusPolling() {
             clearInterval(pollingInterval);
         }
 
-        // Load user logs
+        function refreshStatuses() {
+            bots = bots.map(bot => {
+                if (bot.status === 'Running') {
+                    return { ...bot, performance: Math.min(100, bot.performance + Math.floor(Math.random() * 10)) };
+                }
+                return bot;
+            });
+            renderBots();
+            updateChart();
+            showToast('Statuses refreshed!', 'success');
+            vibrate(50);
+        }
+
+        // Initialize performance chart
+        function initChart() {
+            const ctx = document.getElementById('performanceChart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: bots.map(b => b.name),
+                    datasets: [{
+                        label: 'Performance (%)',
+                        data: bots.map(b => b.performance),
+                        backgroundColor: '#6200ea',
+                        borderColor: '#6200ea',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: { beginAtZero: true, max: 100 }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        title: { display: true, text: 'Bot Performance' }
+                    }
+                }
+            });
+        }
+
+        function updateChart() {
+            if (chart) {
+                chart.data.labels = bots.map(b => b.name);
+                chart.data.datasets[0].data = bots.map(b => b.performance);
+                chart.update();
+            }
+        }
+
+        // Load user logs with pagination
         async function loadLogs(userId) {
             const logsDiv = document.getElementById('logs');
             logsDiv.innerHTML = '';
@@ -689,8 +1007,7 @@ def send_email(subject, body, recipient):
                 .orderBy('timestamp', 'desc')
                 .get();
             querySnapshot.forEach(doc => {
-                const log = doc.data();
-                allUserLogs.push(log);
+                allUserLogs.push(doc.data());
             });
             searchLogs();
         }
@@ -702,7 +1019,7 @@ def send_email(subject, body, recipient):
             const logsDiv = document.getElementById('logs');
             logsDiv.innerHTML = '';
             const now = new Date();
-            allUserLogs
+            const filteredLogs = allUserLogs
                 .filter(log => {
                     const logDate = log.timestamp?.toDate();
                     if (filter === 'today') {
@@ -713,30 +1030,77 @@ def send_email(subject, body, recipient):
                     }
                     return true;
                 })
-                .filter(log => log.input.toLowerCase().includes(searchTerm) || log.response.toLowerCase().includes(searchTerm))
-                .forEach(log => {
-                    logsDiv.innerHTML += `<div class="log-entry p-2">
-                        <p class="text-sm text-gray-500"><b>${log.email}</b> (${new Date(log.timestamp?.toDate()).toLocaleString()}):</p>
-                        <p><b>You:</b> ${log.input}</p>
-                        <p><b>AI:</b> ${log.response}</p>
-                    </div>`;
+                .filter(log => log.input.toLowerCase().includes(searchTerm) || log.response.toLowerCase().includes(searchTerm));
+            const start = logPage * logsPerPage;
+            const end = start + logsPerPage;
+            filteredLogs.slice(start, end).forEach(log => {
+                const logDiv = document.createElement('div');
+                logDiv.className = 'log-entry p-2 swipeable';
+                logDiv.innerHTML = `
+                    <p class="text-sm text-gray-500 dark:text-gray-400"><b>${log.email}</b> (${new Date(log.timestamp?.toDate()).toLocaleString()}):</p>
+                    <p><b>You:</b> ${log.input}</p>
+                    <p><b>AI:</b> ${log.response}</p>
+                `;
+                let touchStartX = 0;
+                logDiv.addEventListener('touchstart', e => {
+                    touchStartX = e.changedTouches[0].screenX;
                 });
+                logDiv.addEventListener('touchend', e => {
+                    const touchEndX = e.changedTouches[0].screenX;
+                    const diffX = touchStartX - touchEndX;
+                    logDiv.classList.remove('swipe-left', 'swipe-right');
+                    if (diffX > 50) {
+                        deleteLog(log);
+                    }
+                });
+                logsDiv.appendChild(logDiv);
+            });
+            document.getElementById('prevLogs').disabled = logPage === 0;
+            document.getElementById('nextLogs').disabled = end >= filteredLogs.length;
+        }
+
+        // Delete log
+        async function deleteLog(log) {
+            const user = auth.currentUser;
+            await db.collection('logs')
+                .where('userId', '==', user.uid)
+                .where('timestamp', '==', log.timestamp)
+                .get()
+                .then(snapshot => snapshot.forEach(doc => doc.ref.delete()));
+            allUserLogs = allUserLogs.filter(l => l.timestamp !== log.timestamp);
+            searchLogs();
+            showToast('Log deleted!', 'success');
+            vibrate(50);
+        }
+
+        // Paginate logs
+        function loadMoreLogs(direction) {
+            if (direction === 'prev' && logPage > 0) {
+                logPage--;
+            } else if (direction === 'next') {
+                logPage++;
+            }
+            searchLogs();
+            vibrate(50);
         }
 
         // Load all logs (boss view)
         async function loadAllLogs() {
             const allLogsDiv = document.getElementById('allLogs');
             allLogsDiv.innerHTML = '';
+            const userFilter = document.getElementById('bossUserFilter').value.toLowerCase();
             const querySnapshot = await db.collection('logs')
                 .orderBy('timestamp', 'desc')
                 .get();
             querySnapshot.forEach(doc => {
                 const log = doc.data();
-                allLogsDiv.innerHTML += `<div class="log-entry p-2">
-                    <p class="text-sm text-gray-500"><b>${log.email}</b> (${new Date(log.timestamp?.toDate()).toLocaleString()}):</p>
-                    <p><b>User:</b> ${log.input}</p>
-                    <p><b>AI:</b> ${log.response}</p>
-                </div>`;
+                if (!userFilter || log.email.toLowerCase().includes(userFilter)) {
+                    allLogsDiv.innerHTML += `<div class="log-entry p-2">
+                        <p class="text-sm text-gray-500 dark:text-gray-400"><b>${log.email}</b> (${new Date(log.timestamp?.toDate()).toLocaleString()}):</p>
+                        <p><b>User:</b> ${log.input}</p>
+                        <p><b>AI:</b> ${log.response}</p>
+                    </div>`;
+                }
             });
         }
 
@@ -751,13 +1115,15 @@ def send_email(subject, body, recipient):
             a.click();
             URL.revokeObjectURL(url);
             showToast('Logs exported as CSV!', 'success');
+            vibrate(50);
         }
 
         // Show toast notification
         function showToast(message, type) {
             const toast = document.createElement('div');
-            toast.className = `toast p-4 rounded shadow-lg ${type === 'success' ? 'bg-green-500' : 'bg-red-500'} text-white animate-slide-in`;
-            toast.textContent = message;
+            const icon = type === 'success' ? '✅' : type === 'error' ? '❌' : '⚠️';
+            toast.className = `toast p-4 rounded shadow-lg flex items-center ${type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-yellow-500'} text-white animate-slide-in`;
+            toast.innerHTML = `${icon} ${message}`;
             document.body.appendChild(toast);
             setTimeout(() => {
                 toast.classList.add('animate-slide-out');
@@ -770,6 +1136,14 @@ def send_email(subject, body, recipient):
             isDarkMode = !isDarkMode;
             document.body.classList.toggle('dark', isDarkMode);
             showToast(`Switched to ${isDarkMode ? 'dark' : 'light'} mode!`, 'success');
+            vibrate(50);
+        }
+
+        // Haptic feedback
+        function vibrate(duration) {
+            if (navigator.vibrate) {
+                navigator.vibrate(duration);
+            }
         }
 
         // Service Worker registration
@@ -783,6 +1157,7 @@ def send_email(subject, body, recipient):
                     .catch(err => {
                         console.error('Service Worker Registration Failed:', err);
                         showToast(`Service Worker failed: ${err.message || err}`, 'error');
+                        document.getElementById('chatArea').innerHTML += `<p class="text-purple-600 dark:text-purple-400"><b>Unified AI:</b> Service Worker failed: ${err.message || err}. Ensure service-worker.js is in root and site uses HTTPS.</p>`;
                     });
             });
         } else {
