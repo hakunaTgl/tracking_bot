@@ -1,4 +1,4 @@
-// Firebase Initialization
+// Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyBONwaRl23VeTJISmiQ3X-t3y6FGK7Ngjc",
   authDomain: "tglsmarthub.firebaseapp.com",
@@ -8,465 +8,239 @@ const firebaseConfig = {
   appId: "1:361291241205:web:854f79a0238e6e4795d7bc",
   measurementId: "G-LQ4BP8GG37"
 };
+
+// Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-// DOM Elements
-const loginModal = document.getElementById('login-modal');
-const hubMain = document.getElementById('hub-main');
-const emailInput = document.getElementById('email');
-const passwordInput = document.getElementById('password');
-const signInBtn = document.getElementById('sign-in-btn');
-const signUpBtn = document.getElementById('sign-up-btn');
-const forgotPassword = document.getElementById('forgot-password');
-const authError = document.getElementById('auth-error');
-const logoutBtn = document.getElementById('logout-btn');
-const fileInput = document.getElementById('file-input');
-const botWizardBtn = document.getElementById('bot-wizard-btn');
-const voiceInputBtn = document.getElementById('voice-input-btn');
-const botList = document.getElementById('bot-list');
-const codeEditor = document.getElementById('code-editor');
-const monacoEditorDiv = document.getElementById('monaco-editor');
-const saveCodeBtn = document.getElementById('save-code-btn');
-const sandboxBtn = document.getElementById('sandbox-btn');
-const cancelCodeBtn = document.getElementById('cancel-code-btn');
-const logSearch = document.getElementById('log-search');
-const logList = document.getElementById('log-list');
-const exportCsvBtn = document.getElementById('export-csv-btn');
-const botAnalytics = document.getElementById('bot-analytics');
-const globalAnalytics = document.getElementById('global-analytics');
-const marketplaceList = document.getElementById('marketplace-list');
-const darkThemeToggle = document.getElementById('dark-theme-toggle');
-const themeIntensity = document.getElementById('theme-intensity');
-const gestureCalibrateBtn = document.getElementById('gesture-calibrate-btn');
-const aiAvatarPanel = document.getElementById('ai-avatar-panel');
-const aiMessage = document.getElementById('ai-message');
-const toast = document.getElementById('toast');
-const tabButtons = document.querySelectorAll('.tab-btn');
-const tabContents = document.querySelectorAll('.tab-content');
-
-// Global State
-let user = null;
-let monacoEditor = null;
-let currentBot = null;
-let recognition = null;
-let ipfsNode = null;
-let tfModel = null;
-let threeScene = null;
-
-// Utility Functions
-function showToast(message, type = 'success') {
+// Utility functions
+function showToast(message, type = 'info') {
+  const toast = document.getElementById('toast');
   toast.textContent = message;
   toast.className = `toast ${type}`;
   toast.classList.remove('hidden');
   setTimeout(() => toast.classList.add('hidden'), 3000);
 }
 
-function vibrate(duration = 100) {
-  if (navigator.vibrate) navigator.vibrate(duration);
+function hapticFeedback(duration = 50) {
+  if (navigator.vibrate) {
+    navigator.vibrate(duration);
+  }
 }
 
 // Authentication
-auth.onAuthStateChanged(firebaseUser => {
-  user = firebaseUser;
-  if (user) {
-    loginModal.classList.add('hidden');
-    hubMain.classList.remove('hidden');
-    initMetaverse();
-    initBots();
-    initLogs();
-    initDashboard();
-    initMarketplace();
-  } else {
-    loginModal.classList.remove('hidden');
-    hubMain.classList.add('hidden');
-  }
-});
-
-signInBtn.addEventListener('click', async () => {
+document.getElementById('sign-in-btn').addEventListener('click', async () => {
+  const email = document.getElementById('email').value;
+  const password = document.getElementById('password').value;
   try {
-    await auth.signInWithEmailAndPassword(emailInput.value, passwordInput.value);
-    showToast('Signed in successfully');
+    await auth.signInWithEmailAndPassword(email, password);
+    showToast('Signed in successfully', 'success');
+    document.getElementById('login-modal').classList.add('hidden');
+    document.getElementById('hub-main').classList.remove('hidden');
   } catch (error) {
-    authError.textContent = error.message;
-    authError.classList.remove('hidden');
+    showToast(error.message, 'error');
   }
 });
 
-signUpBtn.addEventListener('click', async () => {
+document.getElementById('sign-up-btn').addEventListener('click', async () => {
+  const email = document.getElementById('email').value;
+  const password = document.getElementById('password').value;
   try {
-    await auth.createUserWithEmailAndPassword(emailInput.value, passwordInput.value);
-    showToast('Signed up successfully');
+    await auth.createUserWithEmailAndPassword(email, password);
+    showToast('Account created successfully', 'success');
   } catch (error) {
-    authError.textContent = error.message;
-    authError.classList.remove('hidden');
+    showToast(error.message, 'error');
   }
 });
 
-forgotPassword.addEventListener('click', async e => {
-  e.preventDefault();
-  const email = prompt('Enter your email for password reset:');
+document.getElementById('forgot-password').addEventListener('click', () => {
+  const email = document.getElementById('email').value;
   if (email) {
-    try {
-      await auth.sendPasswordResetEmail(email);
-      showToast('Password reset email sent');
-    } catch (error) {
-      showToast(error.message, 'error');
+    auth.sendPasswordResetEmail(email)
+      .then(() => showToast('Password reset email sent', 'info'))
+      .catch(error => showToast(error.message, 'error'));
+  } else {
+    showToast('Please enter your email', 'warning');
+  }
+});
+
+document.getElementById('logout-btn').addEventListener('click', () => {
+  auth.signOut()
+    .then(() => {
+      showToast('Logged out', 'info');
+      document.getElementById('hub-main').classList.add('hidden');
+      document.getElementById('login-modal').classList.remove('hidden');
+    })
+    .catch(error => showToast(error.message, 'error'));
+});
+
+// Unified AI
+class UnifiedAI {
+  constructor() {
+    this.context = {};
+    this.avatar = new THREE.Mesh(/* Placeholder: Define geometry and material for 3D avatar */); 
+    // Initialize additional AI components as needed
+  }
+
+  async processInput(input, type = 'text') {
+    let processedInput = input;
+    if (type === 'voice') {
+      processedInput = await this.transcribeVoice(input);
+    } else if (type === 'file') {
+      processedInput = await this.parseFile(input);
+    }
+    const analysis = await this.analyzeInput(processedInput);
+    const response = await this.generateResponse(analysis);
+    this.updateAvatar(response.emotion);
+    document.getElementById('ai-message').textContent = response.message;
+    if (response.action) {
+      await this.executeAction(response.action);
     }
   }
-});
 
-logoutBtn.addEventListener('click', async () => {
-  await auth.signOut();
-  showToast('Logged out');
-});
-
-// Metaverse UI (Three.js)
-function initMetaverse() {
-  const canvas = document.getElementById('metaverse-canvas');
-  threeScene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-  const renderer = new THREE.WebGLRenderer({ canvas });
-  renderer.setSize(window.innerWidth, window.innerHeight);
-
-  // Add holographic room
-  const geometry = new THREE.BoxGeometry(10, 10, 10);
-  const material = new THREE.MeshBasicMaterial({ color: 0x1E90FF, wireframe: true });
-  const room = new THREE.Mesh(geometry, material);
-  threeScene.add(room);
-
-  // Add AI avatar
-  const avatarGeometry = new THREE.SphereGeometry(0.5, 32, 32);
-  const avatarMaterial = new THREE.MeshBasicMaterial({ color: 0xFF0000 });
-  const avatar = new THREE.Mesh(avatarGeometry, avatarMaterial);
-  avatar.position.set(0, 0, -5);
-  threeScene.add(avatar);
-
-  camera.position.z = 5;
-  function animate() {
-    requestAnimationFrame(animate);
-    room.rotation.y += 0.01;
-    renderer.render(threeScene, camera);
+  async transcribeVoice(audioBlob) {
+    // TODO: Implement Web Speech API or OpenAI Whisper integration
+    return 'Transcribed text'; // Placeholder
   }
-  animate();
-}
 
-// File Handling
-async function parseFile(file) {
-  const fileType = file.type;
-  let content = '';
-  if (fileType.includes('json') || fileType.includes('yaml') || fileType.includes('xml')) {
-    content = await file.text();
-  } else if (fileType.includes('pdf')) {
-    // Mock Google Cloud Vision (replace with actual API)
-    content = 'Extracted PDF text';
-  } else if (fileType.includes('audio')) {
-    // Mock OpenAI Whisper (replace with actual API)
-    content = 'Transcribed audio text';
-  } else if (fileType.includes('video')) {
-    // Mock video analysis
-    content = 'Transcribed video audio';
-  } else if (fileType.includes('image')) {
-    // Mock Google Cloud Vision
-    content = 'Extracted image text';
+  async parseFile(file) {
+    // TODO: Implement file parsing with Google Cloud Vision, OpenAI Whisper, etc.
+    return 'Parsed file content'; // Placeholder
   }
-  // Semantic analysis (mock Hugging Face)
-  const intent = `Bot intent: ${file.name}`; // Replace with Hugging Face NLP
-  return { content, intent };
-}
 
-fileInput.addEventListener('change', async () => {
-  const files = fileInput.files;
-  for (const file of files) {
-    const { content, intent } = await parseFile(file);
-    const questions = [`Clarify purpose for ${intent}?`]; // Mock clarifying questions
-    aiMessage.textContent = questions[0];
-    const bot = await createBotFromFile(content, intent);
-    showToast(`Bot created from ${file.name}`);
+  async analyzeInput(input) {
+    // TODO: Integrate Hugging Face API for sentiment analysis and intent detection
+    return { intent: 'create_bot', sentiment: 'neutral' }; // Placeholder
   }
-});
 
-// Bot Creation & Management
-async function createBotFromFile(content, intent) {
-  const bot = {
-    id: Date.now().toString(),
-    name: intent,
-    code: `// Bot from ${intent}\n${content}`,
-    status: 'Stopped',
-    neural: false
-  };
-  await saveBot(bot);
-  return bot;
-}
-
-async function saveBot(bot) {
-  const db = indexedDB.open('SmartHub', 1);
-  db.onupgradeneeded = () => {
-    db.result.createObjectStore('bots', { keyPath: 'id' });
-  };
-  return new Promise(resolve => {
-    db.onsuccess = () => {
-      const tx = db.result.transaction('bots', 'readwrite');
-      tx.objectStore('bots').put(bot);
-      tx.oncomplete = () => resolve();
-    };
-  });
-}
-
-async function loadBots() {
-  const db = indexedDB.open('SmartHub', 1);
-  return new Promise(resolve => {
-    db.onsuccess = () => {
-      const tx = db.result.transaction('bots', 'readonly');
-      const store = tx.objectStore('bots');
-      const request = store.getAll();
-      request.onsuccess = () => resolve(request.result);
-    };
-  });
-}
-
-async function initBots() {
-  const bots = await loadBots();
-  botList.innerHTML = '';
-  bots.forEach(bot => {
-    const div = document.createElement('div');
-    div.className = 'bot-item glassmorphic';
-    div.innerHTML = `
-      <p>${bot.name} (${bot.status})</p>
-      <button onclick="startBot('${bot.id}')">Start</button>
-      <button onclick="stopBot('${bot.id}')">Stop</button>
-      <button onclick="editBot('${bot.id}')">Edit</button>
-      <button onclick="deleteBot('${bot.id}')">Delete</button>
-    `;
-    botList.appendChild(div);
-  });
-}
-
-async function startBot(id) {
-  // Mock bot execution with neural network
-  if (tfModel) {
-    // Example: Predict bot action
-    const input = tf.tensor2d([[1, 0]]); // Mock input
-    const prediction = tfModel.predict(input);
-    console.log('Neural bot prediction:', prediction.dataSync());
+  async generateResponse(analysis) {
+    // TODO: Generate response based on intent and sentiment using NLP models
+    return { 
+      message: 'Creating bot...', 
+      action: { type: 'create_bot', params: {} }, 
+      emotion: 'happy' 
+    }; // Placeholder
   }
-  showToast(`Bot ${id} started`);
+
+  updateAvatar(emotion) {
+    // TODO: Update 3D avatar expression based on emotion (e.g., happy, sad)
+    // Placeholder: Adjust avatar material or animation
+  }
+
+  async executeAction(action) {
+    if (action.type === 'create_bot') {
+      await Bot.create(action.params);
+    }
+    // TODO: Add more action types (e.g., stop_bot, query_bot)
+  }
 }
 
-async function stopBot(id) {
-  showToast(`Bot ${id} stopped`);
+const ai = new UnifiedAI();
+
+// Bot Management
+class Bot {
+  static async create(params) {
+    const botId = Date.now().toString();
+    const bot = { id: botId, status: 'stopped', code: '// Bot code', ...params };
+    await idb.set('bots', botId, bot);
+    const botList = document.getElementById('bot-list');
+    botList.innerHTML += `<div class="bot-item" data-id="${botId}">${bot.name || 'Unnamed Bot'}</div>`;
+  }
+
+  static async start(botId) {
+    await idb.update('bots', botId, { status: 'running' });
+    // TODO: Implement bot execution logic (e.g., using Web Workers)
+  }
+
+  // TODO: Add methods for stop, restart, pause, edit, delete
 }
 
-async function editBot(id) {
-  const bots = await loadBots();
-  currentBot = bots.find(bot => bot.id === id);
-  codeEditor.classList.remove('hidden');
-  monacoEditor.setValue(currentBot.code);
-}
-
-async function deleteBot(id) {
-  const db = indexedDB.open('SmartHub', 1);
-  return new Promise(resolve => {
-    db.onsuccess = () => {
-      const tx = db.result.transaction('bots', 'readwrite');
-      tx.objectStore('bots').delete(id);
-      tx.oncomplete = () => {
-        initBots();
-        resolve();
-      };
-    };
-  });
-}
-
-saveCodeBtn.addEventListener('click', async () => {
-  currentBot.code = monacoEditor.getValue();
-  await saveBot(currentBot);
-  codeEditor.classList.add('hidden');
-  initBots();
-  showToast('Bot code saved');
-});
-
-sandboxBtn.addEventListener('click', () => {
-  // Mock Pyodide sandbox
-  showToast('Running code in sandbox');
-});
-
-cancelCodeBtn.addEventListener('click', () => {
-  codeEditor.classList.add('hidden');
-});
+// Simplified IndexedDB wrapper
+const idb = {
+  async set(store, key, value) {
+    // TODO: Implement IndexedDB storage
+    console.log(`Storing ${key} in ${store}:`, value); // Placeholder
+  },
+  async get(store, key) {
+    // TODO: Implement IndexedDB retrieval
+    return null; // Placeholder
+  },
+  async update(store, key, updates) {
+    // TODO: Implement IndexedDB update
+    console.log(`Updating ${key} in ${store}:`, updates); // Placeholder
+  }
+};
 
 // Logs
-async function saveLog(input, response) {
-  await db.collection('logs').add({
-    userId: user.uid,
-    email: user.email,
-    input,
-    response,
-    timestamp: firebase.firestore.FieldValue.serverTimestamp()
-  });
-}
-
 async function loadLogs() {
-  const snapshot = await db.collection('logs').where('userId', '==', user.uid).get();
+  const logs = await db.collection('logs').orderBy('timestamp', 'desc').limit(10).get();
+  const logList = document.getElementById('log-list');
   logList.innerHTML = '';
-  snapshot.forEach(doc => {
-    const log = doc.data();
-    const div = document.createElement('div');
-    div.className = 'log-item glassmorphic';
-    div.innerHTML = `<p>${log.input} -> ${log.response} (${log.timestamp.toDate()})</p>`;
-    logList.appendChild(div);
+  logs.forEach(log => {
+    logList.innerHTML += `<div class="log-item">${log.data().message}</div>`;
   });
 }
 
-logSearch.addEventListener('input', () => {
-  const term = logSearch.value.toLowerCase();
-  const logs = document.querySelectorAll('.log-item');
-  logs.forEach(log => {
-    log.style.display = log.textContent.toLowerCase().includes(term) ? '' : 'none';
-  });
+document.getElementById('log-search').addEventListener('input', async (e) => {
+  const query = e.target.value;
+  const logs = await db.collection('logs')
+    .where('message', '>=', query)
+    .where('message', '<=', query + '\uf8ff')
+    .get();
+  // TODO: Update log list UI with filtered results
 });
 
-exportCsvBtn.addEventListener('click', async () => {
-  const snapshot = await db.collection('logs').where('userId', '==', user.uid).get();
-  let csv = 'Input,Response,Timestamp\n';
-  snapshot.forEach(doc => {
-    const log = doc.data();
-    csv += `"${log.input}","${log.response}","${log.timestamp.toDate()}"\n`;
-  });
+document.getElementById('export-csv-btn').addEventListener('click', async () => {
+  const logs = await db.collection('logs').get();
+  const csv = logs.docs.map(doc => doc.data().message).join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = 'logs.csv';
   a.click();
-  URL.revokeObjectURL(url);
 });
 
-// Dashboard
-function initDashboard() {
-  const ctx = botAnalytics.getContext('2d');
-  new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: ['Jan', 'Feb', 'Mar'],
-      datasets: [{
-        label: 'Bot Activity',
-        data: [10, 20, 30],
-        borderColor: '#FF0000',
-        backgroundColor: '#1E90FF'
-      }]
-    }
-  });
-
-  // Mock D3.js global analytics (3D globe)
-  const globe = document.createElement('div');
-  globe.textContent = '3D Globe Heatmap (D3.js)';
-  globalAnalytics.appendChild(globe);
-}
-
-// Marketplace
-async function initMarketplace() {
-  // Mock marketplace
-  marketplaceList.innerHTML = '<div class="market-item glassmorphic">Sample Bot</div>';
-}
-
-// Interactivity
-darkThemeToggle.addEventListener('change', () => {
-  document.body.classList.toggle('dark-theme', darkThemeToggle.checked);
-});
-
-themeIntensity.addEventListener('input', () => {
-  const intensity = themeIntensity.value / 100;
-  document.documentElement.style.setProperty('--red-primary', `rgba(255, 0, 0, ${intensity})`);
-  document.documentElement.style.setProperty('--blue-primary', `rgba(30, 144, 255, ${intensity})`);
-});
-
-gestureCalibrateBtn.addEventListener('click', () => {
-  // Mock MediaPipe calibration
-  showToast('Calibrating gestures...');
-});
-
-// Voice Input
-function initVoiceInput() {
-  recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-  recognition.onresult = async event => {
-    const transcript = event.results[0][0].transcript;
-    aiMessage.textContent = `Heard: ${transcript}`;
-    // Mock OpenAI Whisper fallback
-    const bot = await createBotFromFile(transcript, `Voice bot: ${transcript}`);
-    showToast(`Bot created from voice: ${transcript}`);
-  };
-  recognition.onerror = () => {
-    showToast('Voice input error, try again', 'error');
-  };
-}
-
-voiceInputBtn.addEventListener('click', () => {
+// Interactivity: Voice Input
+document.getElementById('voice-input-btn').addEventListener('click', () => {
+  const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+  recognition.lang = 'en-US';
   recognition.start();
-  showToast('Listening...');
+  recognition.onresult = (event) => {
+    const transcript = event.results[0][0].transcript;
+    ai.processInput(transcript, 'voice');
+  };
+  recognition.onerror = (event) => {
+    showToast('Voice recognition error', 'error');
+    // TODO: Fallback to OpenAI Whisper
+  };
 });
 
-// Monaco Editor
-require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.33.0/min/vs' } });
-require(['vs/editor/editor.main'], () => {
-  monacoEditor = monaco.editor.create(monacoEditorDiv, {
-    value: '// Write bot code here',
-    language: 'javascript',
-    theme: 'vs-dark'
-  });
+// Gesture Control with MediaPipe
+const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
+hands.setOptions({ maxNumHands: 1, modelComplexity: 1 });
+hands.onResults((results) => {
+  if (results.multiHandLandmarks) {
+    // TODO: Process hand landmarks for gestures (e.g., swipe to switch tabs)
+  }
 });
 
-// IPFS for Bot Federation
-async function initIPFS() {
-  ipfsNode = await Ipfs.create();
-  console.log('IPFS node initialized');
+// Gaze Tracking with WebGazer
+webgazer.setGazeListener((data, elapsedTime) => {
+  if (data) {
+    // TODO: Use gaze data to control UI elements
+  }
+}).begin();
+
+// Tool Integration: Example X Profile Analysis
+async function analyzeXProfile(username) {
+  // TODO: Integrate X API or scraping logic
+  return { followers: 1000, posts: 500 }; // Placeholder
 }
 
-// Neural Bot Brains (TensorFlow.js)
-async function initNeuralModel() {
-  tfModel = tf.sequential();
-  tfModel.add(tf.layers.dense({ units: 10, inputShape: [2], activation: 'relu' }));
-  tfModel.add(tf.layers.dense({ units: 1, activation: 'sigmoid' }));
-  tfModel.compile({ optimizer: 'adam', loss: 'binaryCrossentropy' });
-  console.log('Neural model initialized');
-}
-
-// Quantum Optimization (Mock Qiskit.js)
-function optimizeBot(bot) {
-  // Mock quantum-inspired optimization
-  console.log(`Optimizing bot ${bot.id} with Qiskit.js`);
-  return bot;
-}
-
-// Emotion-Aware AI
-function detectMood(input) {
-  // Mock Hugging Face sentiment analysis
-  return input.includes('happy') ? 'positive' : 'neutral';
-}
-
-// Self-Evolving AI (Mock Pinecone)
-function storeFeedback(feedback) {
-  // Mock Pinecone vector DB
-  console.log('Storing feedback:', feedback);
-}
-
-// Tab Navigation
-tabButtons.forEach(btn => {
-  btn.addEventListener('click', () => {
-    tabButtons.forEach(b => b.classList.remove('active'));
-    tabContents.forEach(c => c.classList.add('hidden'));
-    btn.classList.add('active');
-    document.getElementById(`${btn.dataset.tab}-tab`).classList.remove('hidden');
-  });
-});
-
-// Initialize
-async function init() {
-  await initIPFS();
-  await initNeuralModel();
-  initVoiceInput();
-  // Mock particle.js
-  particlesJS('metaverse-canvas', { particles: { number: { value: 50 }, color: { value: '#FF0000' } } });
-}
-init();
+// Artifact Generation
+function generateArtifact(type, content) {
+  const uuid = crypto.randomUUID();
+  const title = type === 'code' ? 'Generated Code' : 'Generated Document';
+  return `
