@@ -2,83 +2,85 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#1E90FF">
   <title>Next-Gen Smart Hub</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icon.png">
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js"></script>
   <!-- Chart.js for dashboards -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <!-- Three.js for metaverse UI and holographic widgets -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.141.0/build/three.min.js"></script>
-  <!-- TensorFlow.js for neural bot brains -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js"></script>
-  <!-- Qiskit.js for quantum-inspired optimization (placeholder, as Qiskit.js is hypothetical) -->
-  <script src="https://cdn.jsdelivr.net/npm/qiskit-js@0.1.0/dist/qiskit.min.js"></script>
-  <!-- MediaPipe for gesture control -->
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.0/hands.min.js"></script>
-  <!-- WebGazer for gaze tracking -->
-  <script src="https://cdn.jsdelivr.net/npm/webgazer@2.0.0/webgazer.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <!-- Lottie for animations -->
   <script src="https://cdn.jsdelivr.net/npm/lottie-web@5.12.2/build/player/lottie.min.js"></script>
   <!-- Particle.js for background effects -->
   <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
   <!-- Monaco Editor for code editing -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.33.0/min/vs/loader.min.js"></script>
-  <!-- IPFS for bot federation -->
-  <script src="https://cdn.jsdelivr.net/npm/ipfs-core@0.18.0/dist/index.min.js"></script>
-  <!-- Pinecone for vector DB (placeholder, client-side mock) -->
-  <script src="https://cdn.jsdelivr.net/npm/pinecone-client@0.1.0/dist/pinecone.min.js"></script>
 </head>
 <body>
+  <!-- Error Boundary -->
+  <div id="error-boundary" class="hidden">
+    <h1>Oops, something broke!</h1>
+    <p id="error-message">Check the console for details.</p>
+    <button id="reload-btn" class="btn red-glow">Reload</button>
+  </div>
+
+  <!-- Loading Screen -->
+  <div id="loading-screen" class="loading">
+    <div class="spinner"></div>
+    <p>Loading Smart Hub...</p>
+  </div>
+
   <!-- Metaverse Canvas -->
-  <div id="metaverse-canvas" class="metaverse-container"></div>
+  <div id="metaverse-canvas" class="metaverse-container" aria-label="3D Metaverse Interface"></div>
 
   <!-- Login Modal -->
-  <div id="login-modal" class="modal hidden">
+  <div id="login-modal" class="modal">
     <div class="modal-content glassmorphic">
       <h2>Smart Hub Login</h2>
-      <input type="email" id="email" placeholder="Email" required>
-      <input type="password" id="password" placeholder="Password" required>
+      <input type="email" id="email" placeholder="Email" required aria-label="Email">
+      <input type="password" id="password" placeholder="Password" required aria-label="Password">
       <button id="sign-in-btn" class="btn red-glow">Sign In</button>
       <button id="sign-up-btn" class="btn blue-glow">Sign Up</button>
-      <a href="#" id="forgot-password">Forgot Password?</a>
+      <a href="#" id="forgot-password" aria-label="Forgot Password">Forgot Password?</a>
       <p id="auth-error" class="error hidden"></p>
     </div>
   </div>
 
   <!-- Main Hub Interface -->
   <div id="hub-main" class="hidden">
-    <!-- Navigation Tabs -->
+    <!-- Navigation -->
     <nav class="tab-nav">
-      <button class="tab-btn active" data-tab="bots">Bots</button>
-      <button class="tab-btn" data-tab="logs">Logs</button>
-      <button class="tab-btn" data-tab="dashboard">Dashboard</button>
-      <button class="tab-btn" data-tab="marketplace">Marketplace</button>
-      <button class="tab-btn" data-tab="settings">Settings</button>
-      <button id="logout-btn" class="btn red-glow">Logout</button>
+      <button class="tab-btn active" data-tab="bots" aria-label="Bots Tab">Bots</button>
+      <button class="tab-btn" data-tab="logs" aria-label="Logs Tab">Logs</button>
+      <button class="tab-btn" data-tab="dashboard" aria-label="Dashboard Tab">Dashboard</button>
+      <button class="tab-btn" data-tab="marketplace" aria-label="Marketplace Tab">Marketplace</button>
+      <button class="tab-btn" data-tab="settings" aria-label="Settings Tab">Settings</button>
+      <button id="logout-btn" class="btn red-glow" aria-label="Logout">Logout</button>
+      <button id="exit-btn" class="btn blue-glow" aria-label="Exit Hub">Exit</button>
     </nav>
 
     <!-- Bots Tab -->
     <div id="bots-tab" class="tab-content active">
       <h2>Bots</h2>
-      <div id="file-upload" class="drop-zone">
+      <div id="file-upload" class="drop-zone" aria-label="File Upload">
         <p>Drop files (JSON, YAML, PDF, audio, video) or click to upload</p>
         <input type="file" id="file-input" multiple accept=".json,.yaml,.xml,.pdf,.mp3,.mp4,.jpg,.png">
       </div>
       <button id="bot-wizard-btn" class="btn blue-glow">Bot Wizard</button>
       <button id="voice-input-btn" class="btn red-glow">Voice Command</button>
-      <div id="bot-list"></div>
+      <div id="bot-list" aria-live="polite"></div>
       <div id="code-editor" class="hidden">
         <div id="monaco-editor" style="height: 400px;"></div>
         <button id="save-code-btn" class="btn blue-glow">Save</button>
         <button id="sandbox-btn" class="btn red-glow">Sandbox</button>
+        <button id="enhance-code-btn" class="btn blue-glow">Enhance</button>
         <button id="cancel-code-btn" class="btn">Cancel</button>
       </div>
     </div>
@@ -86,52 +88,61 @@
     <!-- Logs Tab -->
     <div id="logs-tab" class="tab-content hidden">
       <h2>Logs</h2>
-      <input type="text" id="log-search" placeholder="Search logs...">
-      <div id="log-list"></div>
+      <input type="text" id="log-search" placeholder="Search logs..." aria-label="Search Logs">
+      <div id="log-list" aria-live="polite"></div>
       <button id="export-csv-btn" class="btn blue-glow">Export CSV</button>
     </div>
 
     <!-- Dashboard Tab -->
     <div id="dashboard-tab" class="tab-content hidden">
       <h2>Dashboard</h2>
-      <canvas id="bot-analytics"></canvas>
-      <div id="global-analytics" class="globe-container"></div>
+      <canvas id="bot-analytics" aria-label="Bot Analytics Chart"></canvas>
+      <div id="global-analytics" class="globe-container" aria-label="Global Analytics Globe"></div>
     </div>
 
     <!-- Marketplace Tab -->
     <div id="marketplace-tab" class="tab-content hidden">
       <h2>Bot Marketplace</h2>
-      <div id="marketplace-list"></div>
+      <div id="marketplace-list" aria-live="polite"></div>
     </div>
 
     <!-- Settings Tab -->
     <div id="settings-tab" class="tab-content hidden">
       <h2>Settings</h2>
-      <label><input type="checkbox" id="dark-theme-toggle"> Dark Theme</label>
-      <label><input type="range" id="theme-intensity" min="0" max="100" value="50"> Red-Blue Intensity</label>
+      <label><input type="checkbox" id="dark-theme-toggle" aria-label="Toggle Dark Theme"> Dark Theme</label>
+      <label><input type="range" id="theme-intensity" min="0" max="100" value="50" aria-label="Red-Blue Intensity"> Red-Blue Intensity</label>
       <button id="gesture-calibrate-btn" class="btn blue-glow">Calibrate Gestures</button>
+      <button id="tutorial-btn" class="btn red-glow">Start Tutorial</button>
     </div>
 
     <!-- AI Avatar Panel -->
-    <div id="ai-avatar-panel" class="avatar-panel glassmorphic">
+    <div id="ai-avatar-panel" class="avatar-panel glassmorphic" aria-label="AI Assistant">
       <div id="avatar-3d"></div>
       <p id="ai-message">Welcome, Commander! Ready to build your bot empire?</p>
     </div>
 
     <!-- Toast Notifications -->
-    <div id="toast" class="toast hidden"></div>
+    <div id="toast" class="toast hidden" aria-live="assertive"></div>
   </div>
 
-  <script src="app.js"></script>
+  <!-- Lazy-Loaded Scripts -->
   <script>
-    // Register Service Worker
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/service-worker.js')
-          .then(reg => console.log('Service Worker registered'))
-          .catch(err => console.error('Service Worker error:', err));
+    // Lazy-load heavy scripts after initial render
+    function loadScript(src) {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src;
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
       });
     }
-  </script>
-</body>
-</html>
+
+    window.addEventListener('load', async () => {
+      try {
+        await Promise.all([
+          loadScript('https://cdn.jsdelivr.net/npm/three@0.141.0/build/three.min.js'),
+          loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js'),
+          loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.0/hands.min.js'),
+          loadScript('https://cdn.jsdelivr.net/npm/webgazer@2.0.0/webgazer.min.js'),
+          loadScript('https://cdn.jsdelivr.net/npm/ipfs-core@0.18
