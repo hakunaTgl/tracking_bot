@@ -1,4 +1,4 @@
-const CACHE_NAME = 'smart-hub-cache-v7';
+const CACHE_NAME = 'smart-hub-cache-v8';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -6,7 +6,7 @@ const urlsToCache = [
   '/app.js',
   '/manifest.json',
   '/icon.png',
-  'https://cdn.jsdelivr.net/npm/chart.js',
+  'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.min.js'
 ];
 
 self.addEventListener('install', event => {
