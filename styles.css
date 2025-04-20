@@ -1,0 +1,51 @@
+:root {
+  --red-primary: #FF0000;
+  --red-dark: #B22222;
+  --blue-primary: #1E90FF;
+  --blue-dark: #4682B4;
+  --text-light: #FFFFFF;
+  --glass-bg: rgba(255, 255, 255, 0.1);
+}
+
+body {
+  background: linear-gradient(45deg, var(--blue-dark), var(--red-dark));
+  color: var(--text-light);
+  font-family: 'Orbitron', sans-serif; /* Futuristic font */
+}
+
+.card, .modal {
+  background: var(--glass-bg);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--blue-primary);
+  box-shadow: 0 0 10px var(--red-primary);
+  border-radius: 10px;
+}
+
+button {
+  background: var(--red-primary);
+  color: var(--text-light);
+  border: 2px solid var(--blue-primary);
+  border-radius: 8px;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+button:hover, button:active {
+  transform: scale(1.1);
+  box-shadow: 0 0 15px var(--red-primary);
+}
+
+.ai-avatar-panel {
+  border: 2px solid var(--blue-primary);
+  box-shadow: 0 0 20px var(--red-primary);
+  animation: glow 2s infinite alternate;
+}
+
+@keyframes glow {
+  from { box-shadow: 0 0 10px var(--red-primary); }
+  to { box-shadow: 0 0 20px var(--blue-primary); }
+}
+
+.dark-theme {
+  --text-color: var(--text-light);
+  --bg-color: var(--blue-dark);
+}
