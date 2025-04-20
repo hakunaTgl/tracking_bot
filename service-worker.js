@@ -1,29 +1,43 @@
+const CACHE_NAME = 'smart-hub-cache-v7';
+const urlsToCache = [
+  '/',
+  '/index.html',
+  '/styles.css',
+  '/app.js',
+  '/manifest.json',
+  '/icon.png',
+  'https://cdn.jsdelivr.net/npm/chart.js',
+];
+
 self.addEventListener('install', event => {
-    event.waitUntil(
-        caches.open('bot-hub-cache-v3').then(cache => {
-            return cache.addAll([
-                '/',
-                '/index.html',
-                '/manifest.json',
-                '/icon.png',
-                'https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.min.js'
-            ]);
-        })
-    );
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(urlsToCache))
+  );
 });
 
 self.addEventListener('fetch', event => {
-    const url = new URL(event.request.url);
-    // Bypass Firebase requests
-    if (url.hostname.includes('firebase') || url.hostname.includes('googleapis')) {
-        event.respondWith(fetch(event.request));
-        return;
-    }
-    event.respondWith(
-        caches.match(event.request).then(response => {
-            return response || fetch(event.request).catch(() => {
-                return caches.match('/index.html');
-            });
+  if (event.request.url.includes('firestore.googleapis.com')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+  event.respondWith(
+    caches.match(event.request)
+      .then(response => response || fetch(event.request))
+  );
+});
+
+self.addEventListener('activate', event => {
+  const cacheWhitelist = [CACHE_NAME];
+  event.waitUntil(
+    caches.keys().then(cacheNames => {
+      return Promise.all(
+        cacheNames.map(cacheName => {
+          if (!cacheWhitelist.includes(cacheName)) {
+            return caches.delete(cacheName);
+          }
         })
-    );
+      );
+    })
+  );
 });
