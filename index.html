@@ -13,14 +13,30 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging.js"></script>
   <!-- Three.js for metaverse -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.141.0/build/three.min.js"></script>
   <!-- PDF.js for file parsing -->
   <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+  <!-- Monaco Editor for code editing -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.33.0/min/vs/loader.min.js"></script>
 </head>
 <body>
-  <div id="metaverse-canvas" class="metaverse-container"></div>
-  <div id="login-modal" class="modal">
+  <div id="loading" class="modal">
+    <div class="modal-content glassmorphic">
+      <h2>Loading Smart Hub...</h2>
+      <p>If this persists, check your connection or clear cache.</p>
+    </div>
+  </div>
+  <div id="error" class="modal hidden">
+    <div class="modal-content glassmorphic">
+      <h2>Error Loading Hub</h2>
+      <p id="error-message">An error occurred. Please try refreshing.</p>
+      <button id="retry-btn" class="btn blue-glow">Retry</button>
+    </div>
+  </div>
+  <div id="metaverse-canvas" class="metaverse-container hidden"></div>
+  <div id="login-modal" class="modal hidden">
     <div class="modal-content glassmorphic">
       <h2>Smart Hub Login</h2>
       <input type="email" id="email" placeholder="Email" required>
@@ -34,6 +50,8 @@
     <nav class="tab-nav">
       <button class="tab-btn active" data-tab="bots">Bots</button>
       <button class="tab-btn" data-tab="logs">Logs</button>
+      <button class="tab-btn" data-tab="analytics">Analytics</button>
+      <button id="theme-toggle" class="btn blue-glow">Toggle Theme</button>
       <button id="logout-btn" class="btn red-glow">Logout</button>
     </nav>
     <div id="bots-tab" class="tab-content active">
@@ -44,9 +62,10 @@
       </div>
       <button id="voice-input-btn" class="btn red-glow">Describe Bot (Voice)</button>
       <button id="text-input-btn" class="btn red-glow">Describe Bot (Text)</button>
+      <button id="template-btn" class="btn blue-glow">Use Template</button>
       <div id="text-input" class="hidden">
         <p>Describe your bot:</p>
-        <input type="text" id="text-answer" placeholder="E.g., Build a weather bot">
+        <input type="text" id="text-answer" placeholder="E.g., Build a weather bot every 5 minutes">
         <button id="submit-text" class="btn blue-glow">Submit</button>
       </div>
       <div id="clarify-input" class="hidden">
@@ -54,16 +73,45 @@
         <input type="text" id="clarify-answer" placeholder="Your answer...">
         <button id="submit-clarify" class="btn blue-glow">Submit</button>
       </div>
+      <div id="template-panel" class="panel hidden">
+        <h3>Bot Templates</h3>
+        <button class="template-option" data-type="weather">Weather Bot</button>
+        <button class="template-option" data-type="twitter">Twitter Bot</button>
+        <button class="template-option" data-type="scraper">Scraper Bot</button>
+        <button class="template-option" data-type="custom">Custom API Bot</button>
+      </div>
       <h3>Active Bots</h3>
+      <div id="batch-actions" class="hidden">
+        <button id="batch-start" class="btn green-glow">Start Selected</button>
+        <button id="batch-stop" class="btn red-glow">Stop Selected</button>
+        <button id="batch-delete" class="btn red-glow">Delete Selected</button>
+        <button id="batch-share" class="btn blue-glow">Share Selected</button>
+      </div>
       <div id="bot-list"></div>
+      <button id="bots-back-btn" class="btn blue-glow">Back</button>
     </div>
     <div id="logs-tab" class="tab-content hidden">
       <h2>Logs</h2>
+      <input type="text" id="log-search" placeholder="Search logs...">
       <div id="log-list"></div>
+      <button id="logs-back-btn" class="btn blue-glow">Back</button>
     </div>
-    <div id="ai-avatar-panel" class="avatar-panel glassmorphic">
+    <div id="analytics-tab" class="tab-content hidden">
+      <h2>Analytics</h2>
+      <canvas id="analytics-chart"></canvas>
+      <button id="analytics-back-btn" class="btn blue-glow">Back</button>
+    </div>
+    <div id="edit-bot-tab" class="tab-content hidden">
+      <h2>Edit Bot</h2>
+      <p id="edit-bot-name"></p>
+      <div id="code-editor" style="height: 400px;"></div>
+      <button id="save-edit-btn" class="btn blue-glow">Save Changes</button>
+      <button id="edit-back-btn" class="btn blue-glow">Back</button>
+    </div>
+    <div id="ai-avatar-panel" class="avatar-panel glassmorphic toggleable" data-state="open">
       <div id="avatar-3d"></div>
       <p id="ai-message">Ready to forge your bot empire, Commander?</p>
+      <button id="ai-toggle" class="btn blue-glow">Toggle AI</button>
     </div>
     <div id="toast" class="toast hidden"></div>
     <div id="feedback" class="hidden">
@@ -71,14 +119,44 @@
       <button id="feedback-yes" class="btn green-glow">Yes</button>
       <button id="feedback-no" class="btn red-glow">No</button>
     </div>
+    <div id="confirm-dialog" class="modal hidden">
+      <div class="modal-content glassmorphic">
+        <h2>Confirm Action</h2>
+        <p id="confirm-message"></p>
+        <button id="confirm-yes" class="btn red-glow">Approve</button>
+        <button id="confirm-no" class="btn blue-glow">Cancel</button>
+      </div>
+    </div>
+    <div id="share-panel" class="panel hidden">
+      <h3>Share Bots</h3>
+      <input type="email" id="share-email" placeholder="Recipient email">
+      <button id="share-submit" class="btn blue-glow">Share</button>
+    </div>
   </div>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="app.js"></script>
   <script>
+    console.log('App initializing...');
+    window.addEventListener('error', e => {
+      console.error('Global error:', e.message, e.filename, e.lineno);
+      document.getElementById('loading').classList.add('hidden');
+      document.getElementById('error').classList.remove('hidden');
+      document.getElementById('error-message').textContent = `Error: ${e.message}. Please retry or clear cache.`;
+    });
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/service-worker.js');
+        navigator.serviceWorker.register('/service-worker.js')
+          .then(reg => console.log('Service Worker registered:', reg))
+          .catch(err => console.error('Service Worker error:', err));
       });
     }
+    setTimeout(() => {
+      if (document.getElementById('loading').classList.contains('hidden')) return;
+      document.getElementById('loading').classList.add('hidden');
+      document.getElementById('error').classList.remove('hidden');
+      document.getElementById('error-message').textContent = 'Failed to load resources. Check your connection.';
+    }, 10000);
+    document.getElementById('retry-btn')?.addEventListener('click', () => location.reload());
   </script>
 </body>
 </html>
