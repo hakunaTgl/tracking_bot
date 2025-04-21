@@ -1,4 +1,3 @@
-// Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyBONwaRl23VeTJISmiQ3X-t3y6FGK7Ngjc",
   authDomain: "tglsmarthub.firebaseapp.com",
@@ -9,12 +8,10 @@ const firebaseConfig = {
   measurementId: "G-LQ4BP8GG37"
 };
 
-// Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-// Utility functions
 function showToast(message, type = 'info') {
   const toast = document.getElementById('toast');
   toast.textContent = message;
@@ -24,171 +21,214 @@ function showToast(message, type = 'info') {
 }
 
 function hapticFeedback(duration = 50) {
-  if (navigator.vibrate) {
-    navigator.vibrate(duration);
-  }
+  if (navigator.vibrate) navigator.vibrate(duration);
 }
 
 function narrate(message) {
-  if (document.getElementById('narration-toggle').checked) {
-    const utterance = new SpeechSynthesisUtterance(`Commander, ${message}`);
-    utterance.rate = 0.9;
-    speechSynthesis.speak(utterance);
-  }
+  const utterance = new SpeechSynthesisUtterance(`Commander, ${message}`);
+  utterance.rate = 0.9;
+  speechSynthesis.speak(utterance);
 }
 
 // Authentication
 document.getElementById('sign-in-btn').addEventListener('click', async () => {
-  const email = document.getElementById('email').value;
-  const password = document.getElementById('password').value;
   try {
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
     await auth.signInWithEmailAndPassword(email, password);
     showToast('Signed in successfully', 'success');
     narrate('you are now logged into the Smart Hub.');
     document.getElementById('login-modal').classList.add('hidden');
     document.getElementById('hub-main').classList.remove('hidden');
   } catch (error) {
-    showToast(error.message, 'error');
+    showToast(`Login failed: ${error.message}`, 'error');
   }
 });
 
 document.getElementById('sign-up-btn').addEventListener('click', async () => {
-  const email = document.getElementById('email').value;
-  const password = document.getElementById('password').value;
   try {
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
     await auth.createUserWithEmailAndPassword(email, password);
     showToast('Account created successfully', 'success');
     narrate('your account has been created. Welcome to the galaxy!');
   } catch (error) {
-    showToast(error.message, 'error');
+    showToast(`Signup failed: ${error.message}`, 'error');
   }
 });
 
-document.getElementById('forgot-password').addEventListener('click', () => {
-  const email = document.getElementById('email').value;
-  if (email) {
-    auth.sendPasswordResetEmail(email)
-      .then(() => showToast('Password reset email sent', 'info'))
-      .catch(error => showToast(error.message, 'error'));
-  } else {
-    showToast('Please enter your email', 'warning');
-  }
-});
-
-document.getElementById('logout-btn').addEventListener('click', () => {
-  auth.signOut()
-    .then(() => {
-      showToast('Logged out', 'info');
-      narrate('you have logged out. The galaxy awaits your return.');
-      document.getElementById('hub-main').classList.add('hidden');
-      document.getElementById('login-modal').classList.remove('hidden');
-    })
-    .catch(error => showToast(error.message, 'error'));
-});
-
-document.getElementById('close-hub-btn').addEventListener('click', () => {
+document.getElementById('logout-btn').addEventListener('click', async () => {
+  await auth.signOut();
+  showToast('Logged out', 'info');
+  narrate('you have logged out. The galaxy awaits your return.');
   document.getElementById('hub-main').classList.add('hidden');
   document.getElementById('login-modal').classList.remove('hidden');
 });
 
-// Unified AI
+// Conversation Manager
+class ConversationManager {
+  constructor() {
+    this.history = JSON.parse(localStorage.getItem('convoHistory')) || [];
+    this.currentIntent = null;
+    this.botConfig = {};
+  }
+
+  addInput(input, type, response) {
+    this.history.push({ input, type, response, timestamp: Date.now() });
+    if (this.history.length > 10) this.history.shift();
+    localStorage.setItem('convoHistory', JSON.stringify(this.history));
+  }
+
+  hasAsked(question) {
+    return this.history.some(h => h.response?.clarify === question);
+  }
+
+  setIntent(intent, config) {
+    this.currentIntent = intent;
+    this.botConfig = { ...this.botConfig, ...config };
+  }
+
+  clearSession() {
+    this.currentIntent = null;
+    this.botConfig = {};
+  }
+
+  getContext() {
+    return { history: this.history, intent: this.currentIntent, config: this.botConfig };
+  }
+
+  getLastBotConfig(type) {
+    for (let i = this.history.length - 1; i >= 0; i--) {
+      if (this.history[i].response?.action?.type === 'create_bot' && this.history[i].response.action.params.type === type) {
+        return this.history[i].response.action.params;
+      }
+    }
+    return null;
+  }
+}
+
+const convoManager = new ConversationManager();
+
 class UnifiedAI {
   constructor() {
-    this.context = {};
     this.avatar = new THREE.Mesh(
       new THREE.SphereGeometry(0.5),
       new THREE.MeshBasicMaterial({ color: 0x33B5FF })
     );
     this.scene = new THREE.Scene();
     this.scene.add(this.avatar);
-    this.sentimentModel = null;
-    this.loadSentimentModel();
-  }
-
-  async loadSentimentModel() {
-    // Mock TensorFlow.js model (replace with real model)
-    this.sentimentModel = {
-      predict: (tensor) => ({ dataSync: () => [Math.random()] })
-    };
   }
 
   async processInput(input, type = 'text') {
     let processedInput = input;
-    if (type === 'voice') {
-      processedInput = await this.transcribeVoice(input);
-    } else if (type === 'file') {
-      processedInput = await this.parseFile(input);
-    }
-    const analysis = await this.analyzeInput(processedInput);
+    if (type === 'voice') processedInput = await this.transcribeVoice(input);
+    else if (type === 'file') processedInput = await this.parseFile(input);
+    else if (type === 'clarify') processedInput = { answer: input, context: convoManager.getContext() };
+    else if (type === 'text') processedInput = this.extractConfigFromText(input);
+    if (!processedInput) throw new Error('Input processing failed');
+    const analysis = await this.analyzeInput(processedInput, type);
     const response = await this.generateResponse(analysis);
+    convoManager.addInput(input, type, response);
     this.updateAvatar(response.emotion);
     document.getElementById('ai-message').textContent = response.message;
-    if (response.action) {
+    if (response.clarify) this.showClarifyQuestion(response.clarify);
+    else if (response.action) {
       await this.executeAction(response.action);
+      convoManager.clearSession();
+      document.getElementById('clarify-input').classList.add('hidden');
+      document.getElementById('feedback').classList.remove('hidden');
     }
     narrate(response.message);
     return response;
   }
 
   async transcribeVoice(audioBlob) {
-    // Mock for Web Speech API
-    return audioBlob.toString().substring(0, 50);
+    const transcript = audioBlob.toString().toLowerCase();
+    return this.extractConfigFromText(transcript);
   }
 
   async parseFile(file) {
     const type = file.type;
-    try {
-      if (type === 'application/json') {
-        const text = await file.text();
-        return JSON.parse(text);
-      } else if (type === 'application/pdf') {
-        const arrayBuffer = await file.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
-        let text = '';
-        for (let i = 1; i <= pdf.numPages; i++) {
-          const page = await pdf.getPage(i);
-          const content = await page.getTextContent();
-          text += content.items.map(item => item.str).join(' ');
-        }
-        return { content: text };
-      } else if (type.startsWith('audio/') || type.startsWith('video/') || type.startsWith('image/')) {
-        return { content: `Mock ${type.split('/')[0]} analysis` };
+    if (type === 'application/json') {
+      const text = await file.text();
+      const config = JSON.parse(text);
+      return { name: config.name || file.name.replace('.json', ''), code: config.code || '// Bot code', type: config.type || 'generic', neural: config.neural || false };
+    } else if (type === 'application/x-yaml' || type === 'text/yaml') {
+      const text = await file.text();
+      return { name: text.match(/name: (.+)/)?.[1] || file.name.replace('.yaml', ''), code: text.match(/code: (.+)/)?.[1] || '// Bot code', type: text.match(/type: (.+)/)?.[1] || 'generic', neural: text.includes('neural: true') };
+    } else if (type === 'application/pdf') {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+      let text = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        text += (await page.getTextContent()).items.map(item => item.str).join(' ');
       }
-      throw new Error('Unsupported file type');
-    } catch (error) {
-      showToast(`File parsing failed: ${error.message}`, 'error');
-      return null;
+      return this.extractConfigFromText(text);
     }
+    throw new Error('Unsupported file type');
   }
 
-  async analyzeInput(input) {
-    const sentiment = await this.analyzeSentiment(typeof input === 'string' ? input : JSON.stringify(input));
+  extractConfigFromText(text) {
+    text = text.toLowerCase();
+    let type = 'generic';
+    if (text.includes('weather')) type = 'weather';
+    else if (text.includes('twitter') || text.includes('tweet')) type = 'twitter';
+    else if (text.includes('scrape')) type = 'scraper';
+    let name = text.match(/build (.+?) bot/i)?.[1] || 'Generic Bot';
+    let neural = text.includes('neural');
+    let code = this.generateCode(type);
+    return { name, type, neural, code };
+  }
+
+  async analyzeInput(input, type) {
+    const context = convoManager.getContext();
+    let intent = context.intent || 'create_bot';
+    let botConfig = { ...context.config };
+    if (type === 'clarify') botConfig = { ...botConfig, ...this.parseClarifyAnswer(input.answer, input.context) };
+    else botConfig = input;
+
+    if ((type === 'text' || type === 'voice') && (input.name.toLowerCase().includes('another') || input.name.toLowerCase().includes('similar'))) {
+      const lastConfig = convoManager.getLastBotConfig(botConfig.type);
+      if (lastConfig) botConfig = { ...lastConfig, name: `${lastConfig.name} Copy` };
+    }
+
+    if (!botConfig.type || !botConfig.name) intent = 'clarify';
+    convoManager.setIntent(intent, botConfig);
+    return { intent, botConfig };
+  }
+
+  parseClarifyAnswer(answer, context) {
+    const config = {};
+    if (!context.config.name) config.name = answer || 'Generic Bot';
+    if (!context.config.type) config.type = answer.match(/weather/i) ? 'weather' : answer.match(/twitter|tweet/i) ? 'twitter' : answer.match(/scrape/i) ? 'scraper' : 'generic';
+    if (!context.config.code) config.code = this.generateCode(config.type || context.config.type);
+    config.neural = answer.includes('neural');
+    return config;
+  }
+
+  generateCode(type) {
     return {
-      intent: typeof input === 'object' ? 'create_bot' : 'query',
-      sentiment,
-      botConfig: typeof input === 'object' ? input : null
-    };
-  }
-
-  async analyzeSentiment(text) {
-    const tensor = tf.tensor([text]);
-    const prediction = this.sentimentModel.predict(tensor);
-    return prediction.dataSync()[0] > 0.5 ? 'positive' : 'negative';
+      weather: 'async function run() { return await (await fetch("https://api.openweathermap.org/data/2.5/weather?q=London&appid=YOUR_API_KEY")).json(); }',
+      twitter: 'async function run() { return { status: "Tweet posted" }; }',
+      scraper: 'async function run() { return await (await fetch("https://example.com")).text(); }',
+      generic: '// Generic bot code'
+    }[type] || '// Generic bot code';
   }
 
   async generateResponse(analysis) {
-    if (analysis.intent === 'create_bot' && analysis.botConfig) {
-      return {
-        message: `Creating ${analysis.botConfig.name || 'new'} bot...`,
-        action: { type: 'create_bot', params: analysis.botConfig },
-        emotion: 'happy'
-      };
+    if (analysis.intent === 'create_bot' && analysis.botConfig.name && analysis.botConfig.type) {
+      return { message: `Forging ${analysis.botConfig.name} bot...`, action: { type: 'create_bot', params: analysis.botConfig }, emotion: 'happy' };
     }
-    return {
-      message: 'Processing query...',
-      action: null,
-      emotion: 'neutral'
-    };
+    let clarify = !analysis.botConfig.name && !convoManager.hasAsked('What should the bot be named?') ? 'What should the bot be named?' :
+                  !analysis.botConfig.type && !convoManager.hasAsked('What type of bot do you want (e.g., weather, twitter, scraper)?') ? 'What type of bot do you want (e.g., weather, twitter, scraper)?' : '';
+    return { message: clarify || 'I need more details to create the bot.', clarify, emotion: 'neutral' };
+  }
+
+  showClarifyQuestion(question) {
+    const clarifyDiv = document.getElementById('clarify-input');
+    document.getElementById('clarify-question').textContent = question;
+    clarifyDiv.classList.remove('hidden');
   }
 
   updateAvatar(emotion) {
@@ -198,411 +238,185 @@ class UnifiedAI {
   async executeAction(action) {
     if (action.type === 'create_bot') {
       await Bot.create(action.params);
+      await db.collection('logs').add({ message: `Bot ${action.params.name} created`, timestamp: Date.now() });
     }
   }
 }
 
 const ai = new UnifiedAI();
 
-// Bot Management
 class Bot {
   static async create(params) {
-    try {
-      const botId = Date.now().toString();
-      const bot = {
-        id: botId,
-        name: params.name || 'Unnamed Bot',
-        status: 'stopped',
-        code: params.code || '// Bot code',
-        createdAt: new Date().toISOString(),
-        neural: params.neural || false
-      };
-      await idb.set('bots', botId, bot);
-      const botList = document.getElementById('bot-list');
-      botList.innerHTML += `
-        <div class="bot-item" data-id="${botId}">
-          ${bot.name} (${bot.neural ? 'Neural' : 'Standard'})
-          <button onclick="Bot.start('${botId}')">Start</button>
-          <button onclick="Bot.edit('${botId}')">Edit</button>
-          <button onclick="Bot.delete('${botId}')">Delete</button>
-        </div>`;
-      addWidget('status', { x: Math.random() * 5, y: 1, z: Math.random() * 5 });
-      narrate(`bot ${bot.name} has been forged in the galactic foundry.`);
-      hapticFeedback();
-      return bot;
-    } catch (error) {
-      showToast(`Bot creation failed: ${error.message}`, 'error');
-      throw error;
-    }
+    const botId = Date.now().toString();
+    const bot = { id: botId, name: params.name, status: 'stopped', code: params.code, type: params.type, neural: params.neural, createdAt: new Date().toISOString() };
+    await idb.set('bots', botId, bot);
+    await this.updateBotList();
+    addWidget('status', { x: Math.random() * 5, y: 1, z: Math.random() * 5 });
+    narrate(`Bot ${bot.name} forged in the galactic foundry.`);
+    hapticFeedback();
+    showToast(`Bot ${bot.name} created`, 'success');
+    return bot;
   }
 
   static async start(botId) {
     await idb.update('bots', botId, { status: 'running' });
     showToast(`Bot ${botId} started`, 'success');
-    narrate(`bot ${botId} is now active, patrolling the digital cosmos.`);
-  }
-
-  static async edit(botId) {
-    const bot = await idb.get('bots', botId);
-    const editor = document.getElementById('code-editor');
-    editor.classList.remove('hidden');
-    monaco.editor.create(document.getElementById('monaco-editor'), {
-      value: bot.code,
-      language: 'javascript'
-    });
-    document.getElementById('save-code-btn').onclick = async () => {
-      const newCode = monaco.editor.getModels()[0].getValue();
-      await idb.update('bots', botId, { code: newCode });
-      editor.classList.add('hidden');
-      showToast('Bot code updated', 'success');
-    };
+    narrate(`Bot ${botId} is now active.`);
+    await db.collection('logs').add({ message: `Bot ${botId} started`, timestamp: Date.now() });
   }
 
   static async delete(botId) {
     await idb.delete('bots', botId);
-    document.querySelector(`.bot-item[data-id="${botId}"]`).remove();
+    await this.updateBotList();
     showToast('Bot deleted', 'success');
-    narrate(`bot ${botId} has been decommissioned.`);
+    narrate(`Bot ${botId} decommissioned.`);
+    await db.collection('logs').add({ message: `Bot ${botId} deleted`, timestamp: Date.now() });
+  }
+
+  static async updateBotList() {
+    const bots = await idb.getAll('bots');
+    document.getElementById('bot-list').innerHTML = bots.map(bot => `
+      <div class="bot-item" data-id="${bot.id}">
+        ${bot.name} (${bot.type}${bot.neural ? ', Neural' : ''}) - ${bot.status}
+        <button onclick="Bot.start('${bot.id}')">Start</button>
+        <button onclick="Bot.delete('${bot.id}')">Delete</button>
+      </div>
+    `).join('');
   }
 }
 
-// IndexedDB wrapper
 const idb = {
   async set(store, key, value) {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const openRequest = indexedDB.open('SmartHubDB', 1);
-      openRequest.onupgradeneeded = (event) => {
-        const db = event.target.result;
-        db.createObjectStore('bots', { keyPath: 'id' });
-      };
-      openRequest.onsuccess = (event) => {
-        const db = event.target.result;
-        const transaction = db.transaction([store], 'readwrite');
-        const objectStore = transaction.objectStore(store);
-        const request = objectStore.put(value);
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject(new Error('IndexedDB set failed'));
-      };
-      openRequest.onerror = () => reject(new Error('IndexedDB open failed'));
-    });
-  },
-  async get(store, key) {
-    return new Promise((resolve, reject) => {
-      const openRequest = indexedDB.open('SmartHubDB', 1);
-      openRequest.onsuccess = (event) => {
-        const db = event.target.result;
-        const transaction = db.transaction([store], 'readonly');
-        const objectStore = transaction.objectStore(store);
-        const request = objectStore.get(key);
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(new Error('IndexedDB get failed'));
-      };
-    });
-  },
-  async update(store, key, updates) {
-    return new Promise((resolve, reject) => {
-      const openRequest = indexedDB.open('SmartHubDB', 1);
-      openRequest.onsuccess = (event) => {
-        const db = event.target.result;
-        const transaction = db.transaction([store], 'readwrite');
-        const objectStore = transaction.objectStore(store);
-        const getRequest = objectStore.get(key);
-        getRequest.onsuccess = () => {
-          const data = getRequest.result;
-          const updatedData = { ...data, ...updates };
-          const putRequest = objectStore.put(updatedData);
-          putRequest.onsuccess = () => resolve();
-          putRequest.onerror = () => reject(new Error('IndexedDB update failed'));
-        };
+      openRequest.onupgradeneeded = e => e.target.result.createObjectStore('bots', { keyPath: 'id' });
+      openRequest.onsuccess = e => {
+        const db = e.target.result;
+        const tx = db.transaction([store], 'readwrite');
+        tx.objectStore(store).put(value).onsuccess = () => resolve();
       };
     });
   },
   async delete(store, key) {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const openRequest = indexedDB.open('SmartHubDB', 1);
-      openRequest.onsuccess = (event) => {
-        const db = event.target.result;
-        const transaction = db.transaction([store], 'readwrite');
-        const objectStore = transaction.objectStore(store);
-        const request = objectStore.delete(key);
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject(new Error('IndexedDB delete failed'));
+      openRequest.onsuccess = e => {
+        const db = e.target.result;
+        const tx = db.transaction([store], 'readwrite');
+        tx.objectStore(store).delete(key).onsuccess = () => resolve();
+      };
+    });
+  },
+  async update(store, key, updates) {
+    return new Promise((resolve) => {
+      const openRequest = indexedDB.open('SmartHubDB', 1);
+      openRequest.onsuccess = e => {
+        const db = e.target.result;
+        const tx = db.transaction([store], 'readwrite');
+        const storeObj = tx.objectStore(store);
+        storeObj.get(key).onsuccess = ev => storeObj.put({ ...ev.target.result, ...updates }).onsuccess = () => resolve();
+      };
+    });
+  },
+  async getAll(store) {
+    return new Promise((resolve) => {
+      const openRequest = indexedDB.open('SmartHubDB', 1);
+      openRequest.onsuccess = e => {
+        const db = e.target.result;
+        const tx = db.transaction([store], 'readonly');
+        tx.objectStore(store).getAll().onsuccess = ev => resolve(ev.target.result);
       };
     });
   }
 };
 
-// Logs
 async function loadLogs() {
   const logs = await db.collection('logs').orderBy('timestamp', 'desc').limit(10).get();
-  const logList = document.getElementById('log-list');
-  logList.innerHTML = '';
-  logs.forEach(log => {
-    logList.innerHTML += `
-      <div class="log-item">
-        ${log.data().message} (${new Date(log.data().timestamp).toLocaleString()})
-        <button onclick="deleteLog('${log.id}')">Delete</button>
-      </div>`;
-  });
+  document.getElementById('log-list').innerHTML = logs.docs.map(doc => `<div class="bot-item">${doc.data().message}</div>`).join('');
 }
 
-async function deleteLog(logId) {
-  await db.collection('logs').doc(logId).delete();
-  showToast('Log deleted', 'success');
-  loadLogs();
-}
-
-document.getElementById('log-search').addEventListener('input', async (e) => {
-  const query = e.target.value;
-  const logs = await db.collection('logs')
-    .where('message', '>=', query)
-    .where('message', '<=', query + '\uf8ff')
-    .get();
-  const logList = document.getElementById('log-list');
-  logList.innerHTML = '';
-  logs.forEach(log => {
-    logList.innerHTML += `
-      <div class="log-item">
-        ${log.data().message} (${new Date(log.data().timestamp).toLocaleString()})
-        <button onclick="deleteLog('${log.id}')">Delete</button>
-      </div>`;
-  });
-});
-
-document.getElementById('export-csv-btn').addEventListener('click', async () => {
-  const logs = await db.collection('logs').get();
-  const csv = ['Timestamp,Message'];
-  logs.forEach(log => {
-    csv.push(`${log.data().timestamp},${log.data().message.replace(/,/g, '')}`);
-  });
-  const blob = new Blob([csv.join('\n')], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'logs.csv';
-  a.click();
-});
-
-// Interactivity
+// Event Listeners
 document.getElementById('voice-input-btn').addEventListener('click', () => {
   const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
   recognition.lang = 'en-US';
   recognition.start();
-  recognition.onresult = (event) => {
-    const transcript = event.results[0][0].transcript;
-    ai.processInput(transcript, 'voice');
-    showToast('Voice command processed', 'info');
-  };
-  recognition.onerror = (event) => {
-    showToast(`Voice recognition error: ${event.error}`, 'error');
-  };
+  recognition.onresult = e => ai.processInput(e.results[0][0].transcript, 'voice');
 });
 
-const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
-hands.setOptions({ maxNumHands: 1, modelComplexity: 1 });
-hands.onResults((results) => {
-  if (results.multiHandLandmarks) {
-    const x = results.multiHandLandmarks[0][0].x;
-    if (x > 0.8) {
-      document.querySelector('.tab-btn.active').nextElementSibling?.click();
-    } else if (x < 0.2) {
-      document.querySelector('.tab-btn.active').previousElementSibling?.click();
-    }
+document.getElementById('text-input-btn').addEventListener('click', () => {
+  document.getElementById('text-input').classList.remove('hidden');
+});
+
+document.getElementById('submit-text').addEventListener('click', () => {
+  const description = document.getElementById('text-answer').value;
+  if (description) {
+    ai.processInput(description, 'text');
+    document.getElementById('text-input').classList.add('hidden');
   }
 });
 
-webgazer.setGazeListener((data) => {
-  if (data) {
-    const x = data.x / window.innerWidth;
-    if (x > 0.9) {
-      document.getElementById('bot-wizard-btn').click();
-    }
-  }
-}).begin();
+document.getElementById('submit-clarify').addEventListener('click', () => {
+  const answer = document.getElementById('clarify-answer').value;
+  if (answer) ai.processInput(answer, 'clarify');
+});
 
-// Tool Integration
-async function analyzeXProfile(username) {
-  // Mock X API
-  return { followers: 1000, posts: 500, sentiment: 'positive' };
-}
-
-// Artifact Generation
-function generateArtifact(type, content) {
-  const uuid = crypto.randomUUID();
-  const title = type === 'code' ? 'Generated Code' : 'Generated Document';
-  return `<xaiArtifact artifactType="${type}" contentType="application/${type}" uuid="${uuid}" title="${title}">${content}</xaiArtifact>`;
-}
-
-// Storage
-function saveAIContext(key, value) {
-  localStorage.setItem(key, JSON.stringify(value));
-}
-
-function getAIContext(key) {
-  return JSON.parse(localStorage.getItem(key)) || {};
-}
-
-// Advanced Features
-async function parseFile(file) {
-  const type = file.type;
-  try {
-    if (type === 'application/json') {
-      const text = await file.text();
-      return JSON.parse(text);
-    } else if (type === 'application/pdf') {
-      const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
-      let text = '';
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const content = await page.getTextContent();
-        text += content.items.map(item => item.str).join(' ');
-      }
-      return { content: text, name: file.name.replace('.pdf', '') };
-    } else if (type.startsWith('audio/') || type.startsWith('video/') || type.startsWith('image/')) {
-      return { content: `Mock ${type.split('/')[0]} analysis`, name: file.name };
-    }
-    throw new Error('Unsupported file type');
-  } catch (error) {
-    showToast(`File parsing failed: ${error.message}`, 'error');
-    return null;
-  }
-}
-
-document.getElementById('file-upload').addEventListener('dragover', (e) => e.preventDefault());
-document.getElementById('file-upload').addEventListener('drop', async (e) => {
+document.getElementById('file-upload').addEventListener('drop', async e => {
   e.preventDefault();
-  const files = e.dataTransfer.files;
-  for (const file of files) {
-    const content = await ai.processInput(file, 'file');
-    if (content) {
-      showToast('File processed successfully', 'info');
-    }
-  }
-});
-document.getElementById('file-input').addEventListener('change', async (e) => {
-  const files = e.target.files;
-  for (const file of files) {
-    const content = await ai.processInput(file, 'file');
-    if (content) {
-      showToast('File processed successfully', 'info');
-    }
-  }
+  for (const file of e.dataTransfer.files) await ai.processInput(file, 'file');
 });
 
-document.getElementById('bot-wizard-btn').addEventListener('click', () => {
-  const name = prompt('Enter bot name:');
-  const type = prompt('Enter bot type (weather, scraper, twitter):');
-  if (name && type) {
-    const config = {
-      name,
-      code: `// ${type} bot code`,
-      neural: confirm('Enable neural capabilities?')
-    };
-    ai.processInput(config, 'file');
-    narrate(`initiating ${name} bot creation. Type: ${type}.`);
-  }
+document.getElementById('file-input').addEventListener('change', async e => {
+  for (const file of e.target.files) await ai.processInput(file, 'file');
 });
 
-async function optimizeBotResources(bot) {
-  // Mock quantum-inspired optimization
-  return { cpu: 50, memory: 100 };
-}
+document.getElementById('feedback-yes').addEventListener('click', async () => {
+  await db.collection('feedback').add({ rating: 'yes', timestamp: Date.now() });
+  showToast('Thanks for your feedback!', 'success');
+  document.getElementById('feedback').classList.add('hidden');
+});
 
-async function deployBot(bot, target) {
-  // Mock deployment
-  showToast(`Bot ${bot.name} deployed to ${target}`, 'success');
-  narrate(`bot ${bot.name} launched to ${target} sector.`);
-}
+document.getElementById('feedback-no').addEventListener('click', async () => {
+  await db.collection('feedback').add({ rating: 'no', timestamp: Date.now() });
+  showToast('Thanks for your feedback!', 'success');
+  document.getElementById('feedback').classList.add('hidden');
+});
 
-// Metaverse Interface
+// Metaverse Setup
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('metaverse-canvas'), alpha: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 scene.background = new THREE.Color(0x0D1B2A);
 
-const roomGeometry = new THREE.PlaneGeometry(20, 20);
-const roomMaterial = new THREE.MeshBasicMaterial({
-  color: 0x33B5FF,
-  opacity: 0.3,
-  transparent: true,
-  side: THREE.DoubleSide
-});
-const room = new THREE.Mesh(roomGeometry, roomMaterial);
+const room = new THREE.Mesh(new THREE.PlaneGeometry(8, 8), new THREE.MeshBasicMaterial({ color: 0x33B5FF, opacity: 0.3, transparent: true, side: THREE.DoubleSide }));
 room.rotation.x = Math.PI / 2;
 scene.add(room);
 
 function addWidget(type, position) {
-  const widgetGeometry = new THREE.SphereGeometry(0.5);
-  const widgetMaterial = new THREE.MeshBasicMaterial({
-    color: type === 'status' ? 0xFF3333 : 0x33B5FF
-  });
-  const widget = new THREE.Mesh(widgetGeometry, widgetMaterial);
+  const widget = new THREE.Mesh(new THREE.SphereGeometry(0.3), new THREE.MeshBasicMaterial({ color: type === 'status' ? 0xFF3333 : 0x33B5FF }));
   widget.position.set(position.x, position.y, position.z);
   scene.add(widget);
 }
 
-camera.position.set(0, 5, 10);
+camera.position.set(0, 3, 5);
 camera.lookAt(0, 0, 0);
 
 function animate() {
   requestAnimationFrame(animate);
   room.material.color.setHSL(Math.sin(Date.now() * 0.001) * 0.5 + 0.5, 1, 0.5);
   scene.children.forEach(child => {
-    if (child.geometry.type === 'SphereGeometry') {
-      child.position.y = Math.sin(Date.now() * 0.002 + child.position.x) * 0.5 + 1;
-    }
+    if (child.geometry.type === 'SphereGeometry') child.position.y = Math.sin(Date.now() * 0.002 + child.position.x) * 0.3 + 1;
   });
   renderer.render(scene, camera);
 }
-animate();
+if (renderer.getContext()) animate();
 
-// Dashboard
-function renderDashboard() {
-  const ctx = document.getElementById('bot-analytics').getContext('2d');
-  new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: ['Jan', 'Feb', 'Mar', 'Apr'],
-      datasets: [{
-        label: 'Bot Activity',
-        data: [10, 20, 15, 25],
-        borderColor: '#FF3333',
-        backgroundColor: 'rgba(51, 181, 255, 0.2)'
-      }]
-    }
-  });
-}
-
-function renderGlobe() {
-  // Mock D3.js globe
-  document.getElementById('global-analytics').innerHTML = '3D Globe Placeholder';
-}
-
-// Marketplace
-async function loadMarketplace() {
-  const marketplaceList = document.getElementById('marketplace-list');
-  marketplaceList.innerHTML = `
-    <div class="marketplace-item">Weather Bot - 0.01 ETH <button onclick="buyBot('weather')">Buy</button></div>
-    <div class="marketplace-item">Twitter Bot - 0.02 ETH <button onclick="buyBot('twitter')">Buy</button></div>
-  `;
-}
-
-async function buyBot(type) {
-  // Mock Chainlink purchase
-  showToast(`Purchased ${type} bot`, 'success');
-  narrate(`new ${type} bot acquired. Ready for deployment.`);
-}
-
-// Initialization
-auth.onAuthStateChanged(user => {
+auth.onAuthStateChanged(async user => {
   if (user) {
     document.getElementById('login-modal').classList.add('hidden');
     document.getElementById('hub-main').classList.remove('hidden');
-    loadLogs();
-    renderDashboard();
-    loadMarketplace();
+    await loadLogs();
+    await Bot.updateBotList();
   } else {
     document.getElementById('hub-main').classList.add('hidden');
     document.getElementById('login-modal').classList.remove('hidden');
@@ -615,16 +429,6 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     document.getElementById(`${btn.dataset.tab}-tab`).classList.remove('hidden');
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    narrate(`navigating to ${btn.dataset.tab} sector.`);
+    narrate(`Navigating to ${btn.dataset.tab} sector.`);
   });
-});
-
-document.getElementById('dark-theme-toggle').addEventListener('change', (e) => {
-  document.body.classList.toggle('dark-theme', e.target.checked);
-});
-
-document.getElementById('theme-intensity').addEventListener('input', (e) => {
-  const intensity = e.target.value / 100;
-  document.documentElement.style.setProperty('--red-primary', `hsl(0, 100%, ${50 + intensity * 25}%)`);
-  document.documentElement.style.setProperty('--blue-primary', `hsl(210, 100%, ${50 + intensity * 25}%)`);
 });
