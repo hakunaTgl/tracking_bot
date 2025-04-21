@@ -15,7 +15,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js"></script>
   <!-- Three.js for metaverse -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.141.0/build/three.min.js"></script>
-  <!-- PDF.js for parsing -->
+  <!-- PDF.js for file parsing -->
   <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 </head>
 <body>
@@ -27,7 +27,6 @@
       <input type="password" id="password" placeholder="Password" required>
       <button id="sign-in-btn" class="btn red-glow">Sign In</button>
       <button id="sign-up-btn" class="btn blue-glow">Sign Up</button>
-      <a href="#" id="forgot-password">Forgot Password?</a>
       <p id="auth-error" class="error hidden"></p>
     </div>
   </div>
@@ -43,7 +42,13 @@
         <p>Drop blueprints (JSON, YAML, PDF) or click to upload</p>
         <input type="file" id="file-input" multiple accept=".json,.yaml,.pdf">
       </div>
-      <button id="voice-input-btn" class="btn red-glow">Describe Bot</button>
+      <button id="voice-input-btn" class="btn red-glow">Describe Bot (Voice)</button>
+      <button id="text-input-btn" class="btn red-glow">Describe Bot (Text)</button>
+      <div id="text-input" class="hidden">
+        <p>Describe your bot:</p>
+        <input type="text" id="text-answer" placeholder="E.g., Build a weather bot">
+        <button id="submit-text" class="btn blue-glow">Submit</button>
+      </div>
       <div id="clarify-input" class="hidden">
         <p id="clarify-question"></p>
         <input type="text" id="clarify-answer" placeholder="Your answer...">
@@ -51,27 +56,27 @@
       </div>
       <h3>Active Bots</h3>
       <div id="bot-list"></div>
-      <button id="back-btn" class="btn blue-glow">Back</button>
     </div>
     <div id="logs-tab" class="tab-content hidden">
       <h2>Logs</h2>
-      <input type="text" id="log-search" placeholder="Search logs...">
       <div id="log-list"></div>
-      <button id="back-btn" class="btn blue-glow">Back</button>
     </div>
     <div id="ai-avatar-panel" class="avatar-panel glassmorphic">
       <div id="avatar-3d"></div>
       <p id="ai-message">Ready to forge your bot empire, Commander?</p>
     </div>
     <div id="toast" class="toast hidden"></div>
+    <div id="feedback" class="hidden">
+      <p>Was this helpful?</p>
+      <button id="feedback-yes" class="btn green-glow">Yes</button>
+      <button id="feedback-no" class="btn red-glow">No</button>
+    </div>
   </div>
   <script src="app.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/service-worker.js')
-          .then(reg => console.log('Service Worker registered'))
-          .catch(err => console.error('Service Worker error:', err));
+        navigator.serviceWorker.register('/service-worker.js');
       });
     }
   </script>
