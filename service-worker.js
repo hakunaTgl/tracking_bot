@@ -1,4 +1,4 @@
-const CACHE_NAME = 'smart-hub-cache-v10';
+const CACHE_NAME = 'smart-hub-cache-v1';
 const urlsToCache = ['/', '/index.html', '/styles.css', '/app.js', '/manifest.json', '/icon.png'];
 
 self.addEventListener('install', event => {
