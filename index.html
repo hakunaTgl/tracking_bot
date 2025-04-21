@@ -22,8 +22,21 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.33.0/min/vs/loader.min.js"></script>
 </head>
 <body>
-  <div id="metaverse-canvas" class="metaverse-container"></div>
-  <div id="login-modal" class="modal">
+  <div id="loading" class="modal">
+    <div class="modal-content glassmorphic">
+      <h2>Loading Smart Hub...</h2>
+      <p>If this persists, check your connection or clear cache.</p>
+    </div>
+  </div>
+  <div id="error" class="modal hidden">
+    <div class="modal-content glassmorphic">
+      <h2>Error Loading Hub</h2>
+      <p id="error-message">An error occurred. Please try refreshing.</p>
+      <button id="retry-btn" class="btn blue-glow">Retry</button>
+    </div>
+  </div>
+  <div id="metaverse-canvas" class="metaverse-container hidden"></div>
+  <div id="login-modal" class="modal hidden">
     <div class="modal-content glassmorphic">
       <h2>Smart Hub Login</h2>
       <input type="email" id="email" placeholder="Email" required>
@@ -95,19 +108,27 @@
   </div>
   <script src="app.js"></script>
   <script>
-    console.log('App loaded. Checking login modal...');
-    if (document.getElementById('login-modal')) {
-      console.log('Login modal found!');
-    } else {
-      console.error('Login modal missing!');
-    }
+    console.log('App initializing...');
+    window.addEventListener('error', e => {
+      console.error('Global error:', e.message, e.filename, e.lineno);
+      document.getElementById('loading').classList.add('hidden');
+      document.getElementById('error').classList.remove('hidden');
+      document.getElementById('error-message').textContent = `Error: ${e.message}. Please retry or clear cache.`;
+    });
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/service-worker.js')
-          .then(reg => console.log('Service Worker registered'))
+          .then(reg => console.log('Service Worker registered:', reg))
           .catch(err => console.error('Service Worker error:', err));
       });
     }
+    setTimeout(() => {
+      if (document.getElementById('loading').classList.contains('hidden')) return;
+      document.getElementById('loading').classList.add('hidden');
+      document.getElementById('error').classList.remove('hidden');
+      document.getElementById('error-message').textContent = 'Failed to load resources. Check your connection.';
+    }, 10000);
+    document.getElementById('retry-btn')?.addEventListener('click', () => location.reload());
   </script>
 </body>
 </html>
