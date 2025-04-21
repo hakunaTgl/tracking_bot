@@ -11,6 +11,7 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
+const messaging = firebase.messaging();
 
 function showToast(message, type = 'info') {
   const toast = document.getElementById('toast');
@@ -30,6 +31,40 @@ function narrate(message) {
   speechSynthesis.speak(utterance);
 }
 
+function showConfirmDialog(message, onConfirm) {
+  const dialog = document.getElementById('confirm-dialog');
+  document.getElementById('confirm-message').textContent = message;
+  dialog.classList.remove('hidden');
+  const yesBtn = document.getElementById('confirm-yes');
+  const noBtn = document.getElementById('confirm-no');
+  const handleYes = () => {
+    onConfirm();
+    dialog.classList.add('hidden');
+    yesBtn.removeEventListener('click', handleYes);
+    noBtn.removeEventListener('click', handleNo);
+  };
+  const handleNo = () => {
+    dialog.classList.add('hidden');
+    yesBtn.removeEventListener('click', handleYes);
+    noBtn.removeEventListener('click', handleNo);
+  };
+  yesBtn.addEventListener('click', handleYes);
+  noBtn.addEventListener('click', handleNo);
+}
+
+// Push Notifications
+function setupPushNotifications() {
+  messaging.getToken({ vapidKey: 'YOUR_VAPID_KEY' }).then(token => {
+    if (token) {
+      db.collection('users').doc(auth.currentUser.uid).update({ pushToken: token });
+    }
+  }).catch(err => console.error('Push token error:', err));
+  messaging.onMessage(payload => {
+    showToast(payload.notification.body, 'info');
+    narrate(payload.notification.body);
+  });
+}
+
 // Authentication
 document.getElementById('sign-in-btn').addEventListener('click', async () => {
   try {
@@ -40,8 +75,10 @@ document.getElementById('sign-in-btn').addEventListener('click', async () => {
     narrate('you are now logged into the Smart Hub.');
     document.getElementById('login-modal').classList.add('hidden');
     document.getElementById('hub-main').classList.remove('hidden');
+    if (Notification.permission === 'granted') setupPushNotifications();
   } catch (error) {
     showToast(`Login failed: ${error.message}`, 'error');
+    console.error('Auth error:', error);
   }
 });
 
@@ -54,6 +91,7 @@ document.getElementById('sign-up-btn').addEventListener('click', async () => {
     narrate('your account has been created. Welcome to the galaxy!');
   } catch (error) {
     showToast(`Signup failed: ${error.message}`, 'error');
+    console.error('Auth error:', error);
   }
 });
 
@@ -117,6 +155,7 @@ class UnifiedAI {
     );
     this.scene = new THREE.Scene();
     this.scene.add(this.avatar);
+    this.feedbackScores = { positive: 0, negative: 0 };
   }
 
   async processInput(input, type = 'text') {
@@ -152,10 +191,10 @@ class UnifiedAI {
     if (type === 'application/json') {
       const text = await file.text();
       const config = JSON.parse(text);
-      return { name: config.name || file.name.replace('.json', ''), code: config.code || '// Bot code', type: config.type || 'generic', neural: config.neural || false };
+      return { name: config.name || file.name.replace('.json', ''), code: config.code || '// Bot code', type: config.type || 'generic', neural: config.neural || false, apiKey: config.apiKey };
     } else if (type === 'application/x-yaml' || type === 'text/yaml') {
       const text = await file.text();
-      return { name: text.match(/name: (.+)/)?.[1] || file.name.replace('.yaml', ''), code: text.match(/code: (.+)/)?.[1] || '// Bot code', type: text.match(/type: (.+)/)?.[1] || 'generic', neural: text.includes('neural: true') };
+      return { name: text.match(/name: (.+)/)?.[1] || file.name.replace('.yaml', ''), code: text.match(/code: (.+)/)?.[1] || '// Bot code', type: text.match(/type: (.+)/)?.[1] || 'generic', neural: text.includes('neural: true'), apiKey: text.match(/apiKey: (.+)/)?.[1] };
     } else if (type === 'application/pdf') {
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
@@ -172,13 +211,29 @@ class UnifiedAI {
   extractConfigFromText(text) {
     text = text.toLowerCase();
     let type = 'generic';
+    let apiKey = null;
     if (text.includes('weather')) type = 'weather';
     else if (text.includes('twitter') || text.includes('tweet')) type = 'twitter';
-    else if (text.includes('scrape')) type = 'scraper';
+    else if (text.includes('scrape') || text.includes('scraper')) type = 'scraper';
+    else if (text.includes('custom')) type = 'custom';
     let name = text.match(/build (.+?) bot/i)?.[1] || 'Generic Bot';
-    let neural = text.includes('neural');
-    let code = this.generateCode(type);
-    return { name, type, neural, code };
+    let neural = text.includes('neural') || text.includes('ai');
+    if (type === 'custom') apiKey = text.match(/api key (.+?)(?:\s|$)/)?.[1] || null;
+    let code = this.generateCode(type, apiKey);
+    if (this.feedbackScores.positive > this.feedbackScores.negative) {
+      code = this.optimizeCode(code);
+    }
+    return { name, type, neural, code, apiKey };
+  }
+
+  optimizeCode(code) {
+    if (code.includes('fetch')) {
+      return `
+try {
+  ${code.replace('fetch', 'fetch').replace('}', '}} catch (error) { console.error('Bot error:', error); return { error: error.message }; }')}
+`;
+    }
+    return code;
   }
 
   async analyzeInput(input, type) {
@@ -201,27 +256,32 @@ class UnifiedAI {
   parseClarifyAnswer(answer, context) {
     const config = {};
     if (!context.config.name) config.name = answer || 'Generic Bot';
-    if (!context.config.type) config.type = answer.match(/weather/i) ? 'weather' : answer.match(/twitter|tweet/i) ? 'twitter' : answer.match(/scrape/i) ? 'scraper' : 'generic';
-    if (!context.config.code) config.code = this.generateCode(config.type || context.config.type);
+    if (!context.config.type) config.type = answer.match(/weather/i) ? 'weather' : answer.match(/twitter|tweet/i) ? 'twitter' : answer.match(/scrape/i) ? 'scraper' : answer.match(/custom/i) ? 'custom' : 'generic';
+    if (!context.config.code) config.code = this.generateCode(config.type || context.config.type, context.config.apiKey);
     config.neural = answer.includes('neural');
+    config.apiKey = answer.match(/api key (.+?)(?:\s|$)/)?.[1] || context.config.apiKey;
     return config;
   }
 
-  generateCode(type) {
-    return {
-      weather: 'async function run() { return await (await fetch("https://api.openweathermap.org/data/2.5/weather?q=London&appid=YOUR_API_KEY")).json(); }',
-      twitter: 'async function run() { return { status: "Tweet posted" }; }',
-      scraper: 'async function run() { return await (await fetch("https://example.com")).text(); }',
+  generateCode(type, apiKey) {
+    const templates = {
+      weather: `async function run() { return await (await fetch("https://api.openweathermap.org/data/2.5/weather?q=London&appid=${apiKey || 'YOUR_API_KEY'}")).json(); }`,
+      twitter: `async function run() { return { status: "Tweet posted" }; }`,
+      scraper: `async function run() { return await (await fetch("https://example.com")).text(); }`,
+      custom: `async function run() { return await (await fetch("YOUR_API_URL?key=${apiKey || 'YOUR_API_KEY'}")).json(); }`,
       generic: '// Generic bot code'
-    }[type] || '// Generic bot code';
+    };
+    return templates[type] || '// Generic bot code';
   }
 
   async generateResponse(analysis) {
     if (analysis.intent === 'create_bot' && analysis.botConfig.name && analysis.botConfig.type) {
-      return { message: `Forging ${analysis.botConfig.name} bot...`, action: { type: 'create_bot', params: analysis.botConfig }, emotion: 'happy' };
+      let suggestion = '';
+      if (this.feedbackScores.negative > 0) suggestion = ' Tip: Try specifying an API key for custom bots.';
+      return { message: `Forging ${analysis.botConfig.name} bot...${suggestion}`, action: { type: 'create_bot', params: analysis.botConfig }, emotion: 'happy' };
     }
     let clarify = !analysis.botConfig.name && !convoManager.hasAsked('What should the bot be named?') ? 'What should the bot be named?' :
-                  !analysis.botConfig.type && !convoManager.hasAsked('What type of bot do you want (e.g., weather, twitter, scraper)?') ? 'What type of bot do you want (e.g., weather, twitter, scraper)?' : '';
+                  !analysis.botConfig.type && !convoManager.hasAsked('What type of bot do you want (e.g., weather, twitter, scraper, custom)?') ? 'What type of bot do you want (e.g., weather, twitter, scraper, custom)?' : '';
     return { message: clarify || 'I need more details to create the bot.', clarify, emotion: 'neutral' };
   }
 
@@ -239,7 +299,12 @@ class UnifiedAI {
     if (action.type === 'create_bot') {
       await Bot.create(action.params);
       await db.collection('logs').add({ message: `Bot ${action.params.name} created`, timestamp: Date.now() });
+      if (action.params.type !== 'generic') Bot.run(action.params.id);
     }
+  }
+
+  updateFeedback(rating) {
+    this.feedbackScores[rating === 'yes' ? 'positive' : 'negative']++;
   }
 }
 
@@ -248,7 +313,7 @@ const ai = new UnifiedAI();
 class Bot {
   static async create(params) {
     const botId = Date.now().toString();
-    const bot = { id: botId, name: params.name, status: 'stopped', code: params.code, type: params.type, neural: params.neural, createdAt: new Date().toISOString() };
+    const bot = { id: botId, name: params.name, status: 'stopped', code: params.code, type: params.type, neural: params.neural, apiKey: params.apiKey, createdAt: new Date().toISOString(), version: 1, versions: [{ version: 1, code: params.code, timestamp: new Date().toISOString() }] };
     await idb.set('bots', botId, bot);
     await this.updateBotList();
     addWidget('status', { x: Math.random() * 5, y: 1, z: Math.random() * 5 });
@@ -260,9 +325,11 @@ class Bot {
 
   static async start(botId) {
     await idb.update('bots', botId, { status: 'running' });
+    await this.updateBotList();
     showToast(`Bot ${botId} started`, 'success');
     narrate(`Bot ${botId} is now active.`);
     await db.collection('logs').add({ message: `Bot ${botId} started`, timestamp: Date.now() });
+    this.run(botId);
   }
 
   static async delete(botId) {
@@ -273,15 +340,81 @@ class Bot {
     await db.collection('logs').add({ message: `Bot ${botId} deleted`, timestamp: Date.now() });
   }
 
+  static async edit(botId, newCode) {
+    const bot = await idb.get('bots', botId);
+    const isHighRisk = newCode.includes('delete') || newCode.includes('drop');
+    if (isHighRisk) {
+      showConfirmDialog('This code contains high-risk operations. Approve?', async () => {
+        const newVersion = bot.version + 1;
+        bot.versions.push({ version: newVersion, code: newCode, timestamp: new Date().toISOString() });
+        await idb.update('bots', botId, { code: newCode, version: newVersion, versions: bot.versions });
+        await this.updateBotList();
+        showToast('Bot code updated', 'success');
+        narrate(`Bot ${bot.name} code updated to version ${newVersion}.`);
+        await db.collection('logs').add({ message: `Bot ${botId} code updated`, timestamp: Date.now() });
+      });
+    } else {
+      const newVersion = bot.version + 1;
+      bot.versions.push({ version: newVersion, code: newCode, timestamp: new Date().toISOString() });
+      await idb.update('bots', botId, { code: newCode, version: newVersion, versions: bot.versions });
+      await this.updateBotList();
+      showToast('Bot code updated', 'success');
+      narrate(`Bot ${bot.name} code updated to version ${newVersion}.`);
+      await db.collection('logs').add({ message: `Bot ${botId} code updated`, timestamp: Date.now() });
+    }
+  }
+
+  static async run(botId) {
+    const bot = await idb.get('bots', botId);
+    try {
+      const func = new Function('return ' + bot.code)();
+      const result = await func();
+      showToast(`Bot ${bot.name} ran successfully: ${JSON.stringify(result).slice(0, 50)}`, 'success');
+      await db.collection('logs').add({ message: `Bot ${bot.name} executed: ${JSON.stringify(result)}`, timestamp: Date.now() });
+      if (Notification.permission === 'granted') {
+        new Notification(`Bot ${bot.name} Result`, { body: JSON.stringify(result).slice(0, 100) });
+      }
+    } catch (error) {
+      showToast(`Bot ${bot.name} failed: ${error.message}`, 'error');
+      await db.collection('logs').add({ message: `Bot ${bot.name} failed: ${error.message}`, timestamp: Date.now() });
+      if (Notification.permission === 'granted') {
+        new Notification(`Bot ${bot.name} Failed`, { body: error.message });
+      }
+    }
+  }
+
   static async updateBotList() {
     const bots = await idb.getAll('bots');
     document.getElementById('bot-list').innerHTML = bots.map(bot => `
       <div class="bot-item" data-id="${bot.id}">
-        ${bot.name} (${bot.type}${bot.neural ? ', Neural' : ''}) - ${bot.status}
+        ${bot.name} (${bot.type}${bot.neural ? ', Neural' : ''}) - ${bot.status} (v${bot.version})
         <button onclick="Bot.start('${bot.id}')">Start</button>
+        <button onclick="Bot.editView('${bot.id}')">Edit</button>
         <button onclick="Bot.delete('${bot.id}')">Delete</button>
       </div>
     `).join('');
+  }
+
+  static editView(botId) {
+    idb.get('bots', botId).then(bot => {
+      document.getElementById('edit-bot-name').textContent = `Editing ${bot.name}`;
+      document.getElementById('bots-tab').classList.add('hidden');
+      document.getElementById('edit-bot-tab').classList.remove('hidden');
+      require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.33.0/min/vs' } });
+      require(['vs/editor/editor.main'], () => {
+        const editor = monaco.editor.create(document.getElementById('code-editor'), {
+          value: bot.code,
+          language: 'javascript',
+          theme: 'vs-dark'
+        });
+        document.getElementById('save-edit-btn').onclick = () => {
+          Bot.edit(botId, editor.getValue());
+          editor.dispose();
+          document.getElementById('edit-bot-tab').classList.add('hidden');
+          document.getElementById('bots-tab').classList.remove('hidden');
+        };
+      });
+    });
   }
 }
 
@@ -318,6 +451,16 @@ const idb = {
       };
     });
   },
+  async get(store, key) {
+    return new Promise((resolve) => {
+      const openRequest = indexedDB.open('SmartHubDB', 1);
+      openRequest.onsuccess = e => {
+        const db = e.target.result;
+        const tx = db.transaction([store], 'readonly');
+        tx.objectStore(store).get(key).onsuccess = ev => resolve(ev.target.result);
+      };
+    });
+  },
   async getAll(store) {
     return new Promise((resolve) => {
       const openRequest = indexedDB.open('SmartHubDB', 1);
@@ -330,8 +473,12 @@ const idb = {
   }
 };
 
-async function loadLogs() {
-  const logs = await db.collection('logs').orderBy('timestamp', 'desc').limit(10).get();
+async function loadLogs(search = '') {
+  let query = db.collection('logs').orderBy('timestamp', 'desc').limit(10);
+  if (search) {
+    query = query.where('message', '>=', search).where('message', '<=', search + '\uf8ff');
+  }
+  const logs = await query.get();
   document.getElementById('log-list').innerHTML = logs.docs.map(doc => `<div class="bot-item">${doc.data().message}</div>`).join('');
 }
 
@@ -371,14 +518,52 @@ document.getElementById('file-input').addEventListener('change', async e => {
 
 document.getElementById('feedback-yes').addEventListener('click', async () => {
   await db.collection('feedback').add({ rating: 'yes', timestamp: Date.now() });
+  ai.updateFeedback('yes');
   showToast('Thanks for your feedback!', 'success');
   document.getElementById('feedback').classList.add('hidden');
 });
 
 document.getElementById('feedback-no').addEventListener('click', async () => {
   await db.collection('feedback').add({ rating: 'no', timestamp: Date.now() });
+  ai.updateFeedback('no');
   showToast('Thanks for your feedback!', 'success');
   document.getElementById('feedback').classList.add('hidden');
+});
+
+document.getElementById('log-search').addEventListener('input', e => {
+  loadLogs(e.target.value);
+});
+
+document.getElementById('bots-back-btn').addEventListener('click', () => {
+  document.getElementById('bots-tab').classList.add('hidden');
+  document.getElementById('hub-main').classList.remove('hidden');
+});
+
+document.getElementById('logs-back-btn').addEventListener('click', () => {
+  document.getElementById('logs-tab').classList.add('hidden');
+  document.getElementById('hub-main').classList.remove('hidden');
+});
+
+document.getElementById('edit-back-btn').addEventListener('click', () => {
+  document.getElementById('edit-bot-tab').classList.add('hidden');
+  document.getElementById('bots-tab').classList.remove('hidden');
+});
+
+// Swipe Gestures
+let touchstartX = 0;
+let touchendX = 0;
+document.addEventListener('touchstart', e => touchstartX = e.changedTouches[0].screenX);
+document.addEventListener('touchend', e => {
+  touchendX = e.changedTouches[0].screenX;
+  if (touchendX < touchstartX - 50) {
+    if (document.getElementById('bots-tab').classList.contains('active')) {
+      document.querySelector('[data-tab="logs"]').click();
+    }
+  } else if (touchendX > touchstartX + 50) {
+    if (document.getElementById('logs-tab').classList.contains('active')) {
+      document.querySelector('[data-tab="bots"]').click();
+    }
+  }
 });
 
 // Metaverse Setup
@@ -417,6 +602,7 @@ auth.onAuthStateChanged(async user => {
     document.getElementById('hub-main').classList.remove('hidden');
     await loadLogs();
     await Bot.updateBotList();
+    if (Notification.permission !== 'granted') Notification.requestPermission();
   } else {
     document.getElementById('hub-main').classList.add('hidden');
     document.getElementById('login-modal').classList.remove('hidden');
