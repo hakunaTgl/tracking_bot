@@ -13,33 +13,14 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js"></script>
-  <!-- Chart.js for dashboards -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.min.js"></script>
-  <!-- Three.js for metaverse UI -->
+  <!-- Three.js for metaverse -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.141.0/build/three.min.js"></script>
-  <!-- TensorFlow.js for neural bots -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js"></script>
-  <!-- MediaPipe for gesture control -->
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.0/hands.min.js"></script>
-  <!-- WebGazer for gaze tracking -->
-  <script src="https://cdn.jsdelivr.net/npm/webgazer@2.0.0/webgazer.min.js"></script>
-  <!-- Lottie for animations -->
-  <script src="https://cdn.jsdelivr.net/npm/lottie-web@5.12.2/build/player/lottie.min.js"></script>
-  <!-- Particle.js for background effects -->
-  <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
-  <!-- Monaco Editor for code editing -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.33.0/min/vs/loader.min.js"></script>
-  <!-- IPFS for bot federation -->
-  <script src="https://cdn.jsdelivr.net/npm/ipfs-core@0.18.0/dist/index.min.js"></script>
-  <!-- PDF.js for PDF parsing -->
+  <!-- PDF.js for parsing -->
   <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 </head>
 <body>
-  <!-- Metaverse Canvas -->
   <div id="metaverse-canvas" class="metaverse-container"></div>
-
-  <!-- Login Modal -->
-  <div id="login-modal" class="modal hidden">
+  <div id="login-modal" class="modal">
     <div class="modal-content glassmorphic">
       <h2>Smart Hub Login</h2>
       <input type="email" id="email" placeholder="Email" required>
@@ -50,81 +31,42 @@
       <p id="auth-error" class="error hidden"></p>
     </div>
   </div>
-
-  <!-- Main Hub Interface -->
   <div id="hub-main" class="hidden">
-    <!-- Navigation Tabs -->
     <nav class="tab-nav">
       <button class="tab-btn active" data-tab="bots">Bots</button>
       <button class="tab-btn" data-tab="logs">Logs</button>
-      <button class="tab-btn" data-tab="dashboard">Dashboard</button>
-      <button class="tab-btn" data-tab="marketplace">Marketplace</button>
-      <button class="tab-btn" data-tab="settings">Settings</button>
       <button id="logout-btn" class="btn red-glow">Logout</button>
-      <button id="close-hub-btn" class="btn blue-glow">Close</button>
     </nav>
-
-    <!-- Bots Tab -->
     <div id="bots-tab" class="tab-content active">
       <h2>Bots</h2>
       <div id="file-upload" class="drop-zone">
-        <p>Drop files (JSON, YAML, PDF, audio, video) or click to upload</p>
-        <input type="file" id="file-input" multiple accept=".json,.yaml,.xml,.pdf,.mp3,.mp4,.jpg,.png">
+        <p>Drop blueprints (JSON, YAML, PDF) or click to upload</p>
+        <input type="file" id="file-input" multiple accept=".json,.yaml,.pdf">
       </div>
-      <button id="bot-wizard-btn" class="btn blue-glow">Bot Wizard</button>
-      <button id="voice-input-btn" class="btn red-glow">Voice Command</button>
+      <button id="voice-input-btn" class="btn red-glow">Describe Bot</button>
+      <div id="clarify-input" class="hidden">
+        <p id="clarify-question"></p>
+        <input type="text" id="clarify-answer" placeholder="Your answer...">
+        <button id="submit-clarify" class="btn blue-glow">Submit</button>
+      </div>
+      <h3>Active Bots</h3>
       <div id="bot-list"></div>
-      <div id="code-editor" class="hidden">
-        <div id="monaco-editor" style="height: 400px;"></div>
-        <button id="save-code-btn" class="btn blue-glow">Save</button>
-        <button id="sandbox-btn" class="btn red-glow">Sandbox</button>
-        <button id="cancel-code-btn" class="btn">Cancel</button>
-      </div>
+      <button id="back-btn" class="btn blue-glow">Back</button>
     </div>
-
-    <!-- Logs Tab -->
     <div id="logs-tab" class="tab-content hidden">
       <h2>Logs</h2>
       <input type="text" id="log-search" placeholder="Search logs...">
       <div id="log-list"></div>
-      <button id="export-csv-btn" class="btn blue-glow">Export CSV</button>
+      <button id="back-btn" class="btn blue-glow">Back</button>
     </div>
-
-    <!-- Dashboard Tab -->
-    <div id="dashboard-tab" class="tab-content hidden">
-      <h2>Dashboard</h2>
-      <canvas id="bot-analytics"></canvas>
-      <div id="global-analytics" class="globe-container"></div>
-    </div>
-
-    <!-- Marketplace Tab -->
-    <div id="marketplace-tab" class="tab-content hidden">
-      <h2>Bot Marketplace</h2>
-      <div id="marketplace-list"></div>
-    </div>
-
-    <!-- Settings Tab -->
-    <div id="settings-tab" class="tab-content hidden">
-      <h2>Settings</h2>
-      <label><input type="checkbox" id="dark-theme-toggle" checked> Dark Theme</label>
-      <label><input type="range" id="theme-intensity" min="0" max="100" value="75"> Neon Intensity</label>
-      <label><input type="checkbox" id="narration-toggle"> Sci-Fi Narration</label>
-      <button id="gesture-calibrate-btn" class="btn blue-glow">Calibrate Gestures</button>
-    </div>
-
-    <!-- AI Avatar Panel -->
     <div id="ai-avatar-panel" class="avatar-panel glassmorphic">
       <div id="avatar-3d"></div>
-      <p id="ai-message">Welcome, Commander! Ready to conquer the bot galaxy?</p>
+      <p id="ai-message">Ready to forge your bot empire, Commander?</p>
     </div>
-
-    <!-- Toast Notifications -->
     <div id="toast" class="toast hidden"></div>
   </div>
-
   <script src="app.js"></script>
   <script>
-    // Register Service Worker
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/service-worker.js')
