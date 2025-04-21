@@ -1,19 +1,8 @@
-const CACHE_NAME = 'smart-hub-cache-v8';
-const urlsToCache = [
-  '/',
-  '/index.html',
-  '/styles.css',
-  '/app.js',
-  '/manifest.json',
-  '/icon.png',
-  'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.min.js'
-];
+const CACHE_NAME = 'smart-hub-cache-v10';
+const urlsToCache = ['/', '/index.html', '/styles.css', '/app.js', '/manifest.json', '/icon.png'];
 
 self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(urlsToCache))
-  );
+  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(urlsToCache)));
 });
 
 self.addEventListener('fetch', event => {
@@ -21,23 +10,10 @@ self.addEventListener('fetch', event => {
     event.respondWith(fetch(event.request));
     return;
   }
-  event.respondWith(
-    caches.match(event.request)
-      .then(response => response || fetch(event.request))
-  );
+  event.respondWith(caches.match(event.request).then(response => response || fetch(event.request)));
 });
 
 self.addEventListener('activate', event => {
   const cacheWhitelist = [CACHE_NAME];
-  event.waitUntil(
-    caches.keys().then(cacheNames => {
-      return Promise.all(
-        cacheNames.map(cacheName => {
-          if (!cacheWhitelist.includes(cacheName)) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
-  );
+  event.waitUntil(caches.keys().then(cacheNames => Promise.all(cacheNames.map(cacheName => !cacheWhitelist.includes(cacheName) && caches.delete(cacheName)))));
 });
