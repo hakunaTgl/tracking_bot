@@ -1,10 +1,14 @@
 :root {
   --red-primary: #FF3333;
   --blue-primary: #33B5FF;
+  --green-primary: #33FF33;
   --text-light: #F5F6F5;
   --glass-bg: rgba(20, 20, 30, 0.3);
   --neon-glow: 0 0 15px rgba(255, 51, 51, 0.8), 0 0 30px rgba(51, 181, 255, 0.6);
   --green-glow: 0 0 15px rgba(51, 255, 51, 0.8);
+  --dark-bg: #1A1A2E;
+  --light-bg: #F5F6F5;
+  --light-text: #333333;
 }
 
 body {
@@ -13,6 +17,18 @@ body {
   font-family: 'Orbitron', sans-serif;
   margin: 0;
   overflow: hidden;
+  touch-action: manipulation;
+  transition: background 0.5s, color 0.5s;
+}
+
+body.dark {
+  background: var(--dark-bg);
+  color: var(--text-light);
+}
+
+body.light {
+  background: var(--light-bg);
+  color: var(--light-text);
 }
 
 .metaverse-container {
@@ -24,7 +40,7 @@ body {
   z-index: 1;
 }
 
-.modal, .avatar-panel, .tab-content, #feedback {
+.modal, .panel, .avatar-panel, .tab-content, #feedback, #confirm-dialog {
   background: var(--glass-bg);
   backdrop-filter: blur(12px);
   border: 2px solid var(--blue-primary);
@@ -32,6 +48,14 @@ body {
   border-radius: 12px;
   padding: 20px;
   color: var(--text-light);
+  z-index: 10;
+  transition: transform 0.3s, opacity 0.3s;
+}
+
+.panel.hidden, .modal.hidden, .avatar-panel.hidden {
+  transform: scale(0.8);
+  opacity: 0;
+  pointer-events: none;
 }
 
 .btn {
@@ -44,7 +68,7 @@ body {
   box-shadow: var(--neon-glow);
 }
 
-.btn:hover {
+.btn:hover, .btn:active {
   transform: scale(1.05);
   box-shadow: 0 0 20px var(--red-primary), 0 0 40px var(--blue-primary);
 }
@@ -55,7 +79,7 @@ body {
 }
 
 .green-glow {
-  background: #33FF33;
+  background: var(--green-primary);
   border-color: var(--blue-primary);
   box-shadow: var(--green-glow);
 }
@@ -115,10 +139,6 @@ body {
   box-shadow: var(--neon-glow);
 }
 
-.hidden {
-  display: none;
-}
-
 .bot-item {
   background: var(--glass-bg);
   padding: 10px;
@@ -127,10 +147,31 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  box-shadow: var(--neon-glow);
+}
+
+.bot-item input[type="checkbox"] {
+  margin-right: 10px;
+}
+
+.template-option {
+  display: block;
+  width: 100%;
+  margin: 5px 0;
+  padding: 10px;
+  background: var(--blue-primary);
+  border: none;
+  color: var(--text-light);
+  cursor: pointer;
+}
+
+.hidden {
+  display: none;
 }
 
 @media (max-width: 600px) {
   .tab-nav { flex-direction: column; }
   .tab-btn { margin-bottom: 10px; }
   .avatar-panel { width: 100%; right: 0; }
+  .modal-content, .panel { width: 90%; }
 }
