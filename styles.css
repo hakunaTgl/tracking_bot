@@ -1,7 +1,6 @@
 :root {
   --red-primary: #FF3333;
   --blue-primary: #33B5FF;
-  --green-primary: #33FF33;
   --text-light: #F5F6F5;
   --glass-bg: rgba(20, 20, 30, 0.3);
   --neon-glow: 0 0 15px rgba(255, 51, 51, 0.8), 0 0 30px rgba(51, 181, 255, 0.6);
@@ -14,7 +13,6 @@ body {
   font-family: 'Orbitron', sans-serif;
   margin: 0;
   overflow: hidden;
-  touch-action: manipulation;
 }
 
 .metaverse-container {
@@ -26,7 +24,7 @@ body {
   z-index: 1;
 }
 
-.modal, .avatar-panel, .tab-content, #feedback, #confirm-dialog {
+.modal, .avatar-panel, .tab-content, #feedback {
   background: var(--glass-bg);
   backdrop-filter: blur(12px);
   border: 2px solid var(--blue-primary);
@@ -34,7 +32,6 @@ body {
   border-radius: 12px;
   padding: 20px;
   color: var(--text-light);
-  z-index: 10;
 }
 
 .btn {
@@ -47,7 +44,7 @@ body {
   box-shadow: var(--neon-glow);
 }
 
-.btn:hover, .btn:active {
+.btn:hover {
   transform: scale(1.05);
   box-shadow: 0 0 20px var(--red-primary), 0 0 40px var(--blue-primary);
 }
@@ -58,7 +55,7 @@ body {
 }
 
 .green-glow {
-  background: var(--green-primary);
+  background: #33FF33;
   border-color: var(--blue-primary);
   box-shadow: var(--green-glow);
 }
@@ -118,6 +115,10 @@ body {
   box-shadow: var(--neon-glow);
 }
 
+.hidden {
+  display: none;
+}
+
 .bot-item {
   background: var(--glass-bg);
   padding: 10px;
@@ -126,16 +127,10 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: var(--neon-glow);
-}
-
-.hidden {
-  display: none;
 }
 
 @media (max-width: 600px) {
   .tab-nav { flex-direction: column; }
   .tab-btn { margin-bottom: 10px; }
   .avatar-panel { width: 100%; right: 0; }
-  .modal-content { width: 90%; }
 }
