@@ -13,10 +13,13 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging.js"></script>
   <!-- Three.js for metaverse -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.141.0/build/three.min.js"></script>
   <!-- PDF.js for file parsing -->
   <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+  <!-- Monaco Editor for code editing -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.33.0/min/vs/loader.min.js"></script>
 </head>
 <body>
   <div id="metaverse-canvas" class="metaverse-container"></div>
@@ -56,10 +59,20 @@
       </div>
       <h3>Active Bots</h3>
       <div id="bot-list"></div>
+      <button id="bots-back-btn" class="btn blue-glow">Back</button>
     </div>
     <div id="logs-tab" class="tab-content hidden">
       <h2>Logs</h2>
+      <input type="text" id="log-search" placeholder="Search logs...">
       <div id="log-list"></div>
+      <button id="logs-back-btn" class="btn blue-glow">Back</button>
+    </div>
+    <div id="edit-bot-tab" class="tab-content hidden">
+      <h2>Edit Bot</h2>
+      <p id="edit-bot-name"></p>
+      <div id="code-editor" style="height: 400px;"></div>
+      <button id="save-edit-btn" class="btn blue-glow">Save Changes</button>
+      <button id="edit-back-btn" class="btn blue-glow">Back</button>
     </div>
     <div id="ai-avatar-panel" class="avatar-panel glassmorphic">
       <div id="avatar-3d"></div>
@@ -71,12 +84,28 @@
       <button id="feedback-yes" class="btn green-glow">Yes</button>
       <button id="feedback-no" class="btn red-glow">No</button>
     </div>
+    <div id="confirm-dialog" class="modal hidden">
+      <div class="modal-content glassmorphic">
+        <h2>Confirm High-Risk Action</h2>
+        <p id="confirm-message"></p>
+        <button id="confirm-yes" class="btn red-glow">Approve</button>
+        <button id="confirm-no" class="btn blue-glow">Cancel</button>
+      </div>
+    </div>
   </div>
   <script src="app.js"></script>
   <script>
+    console.log('App loaded. Checking login modal...');
+    if (document.getElementById('login-modal')) {
+      console.log('Login modal found!');
+    } else {
+      console.error('Login modal missing!');
+    }
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/service-worker.js');
+        navigator.serviceWorker.register('/service-worker.js')
+          .then(reg => console.log('Service Worker registered'))
+          .catch(err => console.error('Service Worker error:', err));
       });
     }
   </script>
