@@ -4,8 +4,8 @@
   --green-primary: #33FF33;
   --text-light: #F5F6F5;
   --glass-bg: rgba(20, 20, 30, 0.3);
-  --neon-glow: 0 0 15px rgba(255, 51, 51, 0.8), 0 0 30px rgba(51, 181, 255, 0.6);
-  --green-glow: 0 0 15px rgba(51, 255, 51, 0.8);
+  --neon-glow: 0 0 10px rgba(255, 51, 51, 0.6); /* Reduced intensity */
+  --green-glow: 0 0 10px rgba(51, 255, 51, 0.6);
   --dark-bg: #1A1A2E;
   --light-bg: #F5F6F5;
   --light-text: #333333;
@@ -18,7 +18,6 @@ body {
   margin: 0;
   overflow-x: hidden;
   touch-action: manipulation;
-  transition: background 0.5s, color 0.5s;
 }
 
 body.dark {
@@ -40,16 +39,16 @@ body.light {
   z-index: 1;
 }
 
-.modal, .panel, .avatar-panel, .tab-content, #feedback, #confirm-dialog {
+.modal, .panel, .avatar-panel, .tab-content, #confirm-dialog {
   background: var(--glass-bg);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(8px); /* Reduced blur for performance */
   border: 2px solid var(--blue-primary);
   box-shadow: var(--neon-glow);
   border-radius: 12px;
   padding: 20px;
   color: var(--text-light);
   z-index: 10;
-  transition: transform 0.3s ease, opacity 0.3s ease;
+  will-change: transform, opacity; /* GPU acceleration */
 }
 
 .panel.hidden, .modal.hidden, .avatar-panel.hidden {
@@ -62,17 +61,16 @@ body.light {
   background: var(--red-primary);
   color: var(--text-light);
   border: 2px solid var(--blue-primary);
-  padding: 12px 24px;
+  padding: 14px 28px; /* Larger for touch */
   cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: transform 0.2s;
   box-shadow: var(--neon-glow);
-  font-size: 1.1em;
+  font-size: 1.3em;
   touch-action: manipulation;
 }
 
 .btn:hover, .btn:active {
   transform: scale(1.05);
-  box-shadow: 0 0 20px var(--red-primary), 0 0 40px var(--blue-primary);
 }
 
 .blue-glow {
@@ -152,11 +150,19 @@ body.light {
   flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  box-shadow: var(--neon-glow);
 }
 
 .bot-item input[type="checkbox"] {
   margin-right: 10px;
+}
+
+.bot-health {
+  font-size: 0.9em;
+  color: var(--green-primary);
+}
+
+.bot-health.error {
+  color: var(--red-primary);
 }
 
 .template-option {
@@ -186,6 +192,11 @@ body.light {
   transition: width 0.5s ease;
 }
 
+.error {
+  color: var(--red-primary);
+  font-size: 0.9em;
+}
+
 .hidden {
   display: none;
 }
@@ -195,7 +206,7 @@ body.light {
   .tab-btn { margin-bottom: 10px; font-size: 1em; }
   .avatar-panel { width: 100%; right: 0; bottom: 10px; }
   .modal-content, .panel { width: 90%; margin: 0 auto; }
-  .btn { padding: 10px 20px; font-size: 1em; }
+  .btn { padding: 14px 24px; font-size: 1.2em; }
   .bot-item { flex-direction: column; align-items: flex-start; }
   .bot-item button { margin: 5px 0; width: 100%; }
 }
