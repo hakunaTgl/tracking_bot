@@ -1,3 +1,11 @@
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js';
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js';
+import { getFirestore, collection, addDoc, query, orderBy, limit, getDocs, where } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js';
+import { getMessaging, getToken, onMessage } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging.js';
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.141.0/build/three.module.js';
+import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.141.0/examples/jsm/controls/OrbitControls.js';
+import { Chart } from 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.esm.js';
+
 const firebaseConfig = {
   apiKey: "AIzaSyBONwaRl23VeTJISmiQ3X-t3y6FGK7Ngjc",
   authDomain: "tglsmarthub.firebaseapp.com",
@@ -9,17 +17,16 @@ const firebaseConfig = {
 };
 
 try {
-  firebase.initializeApp(firebaseConfig);
+  initializeApp(firebaseConfig);
   console.log('Firebase initialized');
+  document.getElementById('loading')?.classList.add('hidden');
 } catch (error) {
   console.error('Firebase init error:', error);
-  document.getElementById('loading').classList.add('hidden');
-  document.getElementById('error').classList.remove('hidden');
-  document.getElementById('error-message').textContent = 'Failed to initialize Firebase. Check your connection.';
+  showError(`Failed to initialize Firebase: ${error.message}`);
 }
-const auth = firebase.auth();
-const db = firebase.firestore();
-const messaging = firebase.messaging();
+const auth = getAuth();
+const db = getFirestore();
+const messaging = getMessaging();
 
 function showToast(message, type = 'info') {
   const toast = document.getElementById('toast');
@@ -27,6 +34,13 @@ function showToast(message, type = 'info') {
   toast.className = `toast ${type}`;
   toast.classList.remove('hidden');
   setTimeout(() => toast.classList.add('hidden'), 3000);
+  hapticFeedback();
+}
+
+function showError(message) {
+  document.getElementById('loading').classList.add('hidden');
+  document.getElementById('error').classList.remove('hidden');
+  document.getElementById('error-message').textContent = message;
 }
 
 function hapticFeedback(duration = 50) {
@@ -40,6 +54,7 @@ function narrate(message) {
     speechSynthesis.speak(utterance);
   } catch (error) {
     console.error('Narration error:', error);
+    logError('Narration failed', error.message);
   }
 }
 
@@ -66,78 +81,91 @@ function showConfirmDialog(message, onConfirm) {
 
 async function logError(message, details) {
   try {
-    await db.collection('errors').add({ message, details, timestamp: Date.now(), user: auth.currentUser?.uid });
+    await addDoc(collection(db, 'errors'), { message, details, timestamp: Date.now(), user: auth.currentUser?.uid });
   } catch (error) {
     console.error('Error logging failed:', error);
   }
 }
 
-// Push Notifications
 function setupPushNotifications() {
   try {
-    messaging.getToken({ vapidKey: 'YOUR_VAPID_KEY' }).then(token => {
+    getToken(messaging, { vapidKey: 'YOUR_VAPID_KEY' }).then(token => {
       if (token) {
-        db.collection('users').doc(auth.currentUser.uid).update({ pushToken: token });
+        addDoc(collection(db, 'users'), { uid: auth.currentUser.uid, pushToken: token });
       }
     }).catch(err => console.error('Push token error:', err));
-    messaging.onMessage(payload => {
+    onMessage(messaging, payload => {
       showToast(payload.notification.body, 'info');
       narrate(payload.notification.body);
     });
   } catch (error) {
     console.error('Push setup error:', error);
-    logError('Push notification setup failed', error.message);
+    logError('Push setup failed', error.message);
   }
 }
 
-// Authentication
-document.getElementById('sign-in-btn').addEventListener('click', async () => {
-  try {
-    const email = document.getElementById('email').value;
-    const password = document.getElementById('password').value;
-    await auth.signInWithEmailAndPassword(email, password);
-    showToast('Signed in successfully', 'success');
-    narrate('you are now logged into the Smart Hub.');
-    document.getElementById('login-modal').classList.add('hidden');
-    document.getElementById('hub-main').classList.remove('hidden');
-    document.getElementById('metaverse-canvas').classList.remove('hidden');
-    if (Notification.permission === 'granted') setupPushNotifications();
-  } catch (error) {
-    showToast(`Login failed: ${error.message}`, 'error');
-    console.error('Auth error:', error);
-    logError('Login failed', error.message);
+class IDB {
+  static async init() {
+    return new Promise((resolve, reject) => {
+      const openRequest = indexedDB.open('SmartHubDB', 2);
+      openRequest.onupgradeneeded = e => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('bots')) {
+          db.createObjectStore('bots', { keyPath: 'id' });
+        }
+      };
+      openRequest.onsuccess = e => resolve(e.target.result);
+      openRequest.onerror = e => reject(e);
+    });
   }
-});
 
-document.getElementById('sign-up-btn').addEventListener('click', async () => {
-  try {
-    const email = document.getElementById('email').value;
-    const password = document.getElementById('password').value;
-    await auth.createUserWithEmailAndPassword(email, password);
-    showToast('Account created successfully', 'success');
-    narrate('your account has been created. Welcome to the galaxy!');
-  } catch (error) {
-    showToast(`Signup failed: ${error.message}`, 'error');
-    console.error('Auth error:', error);
-    logError('Signup failed', error.message);
+  static async set(store, key, value) {
+    const db = await this.init();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction([store], 'readwrite');
+      tx.objectStore(store).put(value).onsuccess = () => resolve();
+      tx.onerror = e => reject(e);
+    });
   }
-});
 
-document.getElementById('logout-btn').addEventListener('click', async () => {
-  try {
-    await auth.signOut();
-    showToast('Logged out', 'info');
-    narrate('you have logged out. The galaxy awaits your return.');
-    document.getElementById('hub-main').classList.add('hidden');
-    document.getElementById('login-modal').classList.remove('hidden');
-    document.getElementById('metaverse-canvas').classList.add('hidden');
-  } catch (error) {
-    console.error('Logout error:', error);
-    logError('Logout failed', error.message);
+  static async delete(store, key) {
+    const db = await this.init();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction([store], 'readwrite');
+      tx.objectStore(store).delete(key).onsuccess = () => resolve();
+      tx.onerror = e => reject(e);
+    });
   }
-});
 
-// Conversation Manager
+  static async update(store, key, updates) {
+    const db = await this.init();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction([store], 'readwrite');
+      const storeObj = tx.objectStore(store);
+      storeObj.get(key).onsuccess = ev => storeObj.put({ ...ev.target.result, ...updates }).onsuccess = () => resolve();
+      tx.onerror = e => reject(e);
+    });
+  }
+
+  static async get(store, key) {
+    const db = await this.init();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction([store], 'readonly');
+      tx.objectStore(store).get(key).onsuccess = ev => resolve(ev.target.result);
+      tx.onerror = e => reject(e);
+    });
+  }
+
+  static async getAll(store) {
+    const db = await this.init();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction([store], 'readonly');
+      tx.objectStore(store).getAll().onsuccess = ev => resolve(ev.target.result);
+      tx.onerror = e => reject(e);
+    });
+  }
+}
+
 class ConversationManager {
   constructor() {
     this.history = JSON.parse(localStorage.getItem('convoHistory')) || [];
@@ -188,19 +216,13 @@ const convoManager = new ConversationManager();
 
 class UnifiedAI {
   constructor() {
-    try {
-      this.avatar = new THREE.Mesh(
-        new THREE.SphereGeometry(0.5),
-        new THREE.MeshBasicMaterial({ color: 0x33B5FF })
-      );
-      this.scene = new THREE.Scene();
-      this.scene.add(this.avatar);
-      this.feedbackScores = { positive: 0, negative: 0 };
-      this.badges = [];
-    } catch (error) {
-      console.error('AI initialization error:', error);
-      logError('AI initialization failed', error.message);
-    }
+    this.avatar = new THREE.Mesh(new THREE.SphereGeometry(0.5), new THREE.MeshBasicMaterial({ color: 0x33B5FF }));
+    this.scene = new THREE.Scene();
+    this.scene.add(this.avatar);
+    this.feedbackScores = { positive: 0, negative: 0 };
+    this.badges = [];
+    this.worker = new Worker('bot-worker.js');
+    this.worker.onmessage = e => this.handleWorkerMessage(e.data);
   }
 
   async processInput(input, type = 'text') {
@@ -212,7 +234,6 @@ class UnifiedAI {
       else if (type === 'clarify') processedInput = { answer: input, context: convoManager.getContext() };
       else if (type === 'text') processedInput = this.extractConfigFromText(input);
       else if (type === 'command') processedInput = this.parseVoiceCommand(input);
-      if (!processedInput) throw new Error('Input processing failed');
       const analysis = await this.analyzeInput(processedInput, type);
       const response = await this.generateResponse(analysis);
       convoManager.addInput(input, type, response);
@@ -236,248 +257,180 @@ class UnifiedAI {
   }
 
   async transcribeVoice(audioBlob) {
-    try {
-      const transcript = audioBlob.toString().toLowerCase();
-      return transcript.includes('start all') || transcript.includes('stop all') ? this.parseVoiceCommand(transcript) : this.extractConfigFromText(transcript);
-    } catch (error) {
-      console.error('Voice transcription error:', error);
-      logError('Voice transcription failed', error.message);
-      throw error;
-    }
+    return audioBlob.toString().toLowerCase();
   }
 
   async parseFile(file) {
-    try {
-      const type = file.type;
-      if (type === 'application/json') {
-        const text = await file.text();
-        const config = JSON.parse(text);
-        return { name: config.name || file.name.replace('.json', ''), code: config.code || '// Bot code', type: config.type || 'generic', neural: config.neural || false, apiKey: config.apiKey, schedule: config.schedule, chain: config.chain };
-      } else if (type === 'application/x-yaml' || type === 'text/yaml') {
-        const text = await file.text();
-        return { name: text.match(/name: (.+)/)?.[1] || file.name.replace('.yaml', ''), code: text.match(/code: (.+)/)?.[1] || '// Bot code', type: text.match(/type: (.+)/)?.[1] || 'generic', neural: text.includes('neural: true'), apiKey: text.match(/apiKey: (.+)/)?.[1], schedule: text.match(/schedule: (.+)/)?.[1], chain: text.match(/chain: (.+)/)?.[1] };
-      } else if (type === 'application/pdf') {
-        const arrayBuffer = await file.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
-        let text = '';
-        for (let i = 1; i <= pdf.numPages; i++) {
-          const page = await pdf.getPage(i);
-          text += (await page.getTextContent()).items.map(item => item.str).join(' ');
-        }
-        return this.extractConfigFromText(text);
+    const type = file.type;
+    if (type === 'application/json') {
+      const text = await file.text();
+      const config = JSON.parse(text);
+      return { name: config.name || file.name.replace('.json', ''), code: config.code || '// Bot code', type: config.type || 'generic', neural: config.neural || false, apiKey: config.apiKey, schedule: config.schedule, chain: config.chain };
+    } else if (type === 'application/x-yaml' || type === 'text/yaml') {
+      const text = await file.text();
+      return { name: text.match(/name: (.+)/)?.[1] || file.name.replace('.yaml', ''), code: text.match(/code: (.+)/)?.[1] || '// Bot code', type: text.match(/type: (.+)/)?.[1] || 'generic', neural: text.includes('neural: true'), apiKey: text.match(/apiKey: (.+)/)?.[1], schedule: text.match(/schedule: (.+)/)?.[1], chain: text.match(/chain: (.+)/)?.[1] };
+    } else if (type === 'application/pdf') {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+      let text = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        text += (await page.getTextContent()).items.map(item => item.str).join(' ');
       }
-      throw new Error('Unsupported file type');
-    } catch (error) {
-      console.error('File parsing error:', error);
-      logError('File parsing failed', error.message);
-      throw error;
+      return this.extractConfigFromText(text);
     }
+    throw new Error('Unsupported file type');
   }
 
   parseVoiceCommand(command) {
-    try {
-      command = command.toLowerCase();
-      if (command.includes('start all')) return { action: 'batch_start' };
-      if (command.includes('stop all')) return { action: 'batch_stop' };
-      if (command.includes('delete all')) return { action: 'batch_delete' };
-      return this.extractConfigFromText(command);
-    } catch (error) {
-      console.error('Voice command parsing error:', error);
-      logError('Voice command parsing failed', error.message);
-      throw error;
-    }
+    command = command.toLowerCase();
+    if (command.includes('start all')) return { action: 'batch_start' };
+    if (command.includes('stop all')) return { action: 'batch_stop' };
+    if (command.includes('delete all')) return { action: 'batch_delete' };
+    return this.extractConfigFromText(command);
   }
 
   extractConfigFromText(text) {
-    try {
-      text = text.toLowerCase();
-      let type = 'generic';
-      let apiKey = null;
-      let schedule = null;
-      let chain = null;
-      if (text.includes('weather')) type = 'weather';
-      else if (text.includes('twitter') || text.includes('tweet')) type = 'twitter';
-      else if (text.includes('scrape') || text.includes('scraper')) type = 'scraper';
-      else if (text.includes('custom')) type = 'custom';
-      let name = text.match(/build (.+?) bot/i)?.[1] || 'Generic Bot';
-      let neural = text.includes('neural') || text.includes('ai');
-      if (type === 'custom') apiKey = text.match(/api key (.+?)(?:\s|$)/)?.[1] || null;
-      if (text.includes('every')) schedule = text.match(/every (\d+) minutes/i)?.[1] || null;
-      if (text.includes('chain') || text.includes('then')) chain = text.match(/chain (.+?)(?:\s|$)/)?.[1] || text.match(/then (.+?)(?:\s|$)/)?.[1] || null;
-      let code = this.generateCode(type, apiKey);
-      if (this.feedbackScores.positive > this.feedbackScores.negative) {
-        code = this.optimizeCode(code);
-      }
-      return { name, type, neural, code, apiKey, schedule, chain };
-    } catch (error) {
-      console.error('Text extraction error:', error);
-      logError('Text extraction failed', error.message);
-      throw error;
+    text = text.toLowerCase();
+    let type = 'generic';
+    let apiKey = null;
+    let schedule = null;
+    let chain = null;
+    if (text.includes('weather')) type = 'weather';
+    else if (text.includes('twitter') || text.includes('tweet')) type = 'twitter';
+    else if (text.includes('scrape') || text.includes('scraper')) type = 'scraper';
+    else if (text.includes('custom')) type = 'custom';
+    let name = text.match(/build (.+?) bot/i)?.[1] || 'Generic Bot';
+    let neural = text.includes('neural') || text.includes('ai');
+    if (type === 'custom') apiKey = text.match(/api key (.+?)(?:\s|$)/)?.[1] || null;
+    if (text.includes('every')) schedule = text.match(/every (\d+) minutes/i)?.[1] || null;
+    if (text.includes('chain') || text.includes('then')) chain = text.match(/chain (.+?)(?:\s|$)/)?.[1] || text.match(/then (.+?)(?:\s|$)/)?.[1] || null;
+    let code = this.generateCode(type, apiKey);
+    if (this.feedbackScores.positive > this.feedbackScores.negative) {
+      code = this.optimizeCode(code);
     }
+    return { name, type, neural, code, apiKey, schedule, chain };
   }
 
   optimizeCode(code) {
-    try {
-      if (code.includes('fetch')) {
-        return `
+    if (code.includes('fetch')) {
+      return `
 try {
-  ${code.replace('fetch', 'fetch').replace('}', '}} catch (error) { console.error('Bot error:', error); return { error: error.message }; }')}
+  ${code.replace('fetch', 'fetch').replace('}', '}} catch (error) { console.error("Bot error:", error); return { error: error.message }; }')}
 `;
-      }
-      return code;
-    } catch (error) {
-      console.error('Code optimization error:', error);
-      logError('Code optimization failed', error.message);
-      return code;
     }
+    return code;
   }
 
   async analyzeInput(input, type) {
-    try {
-      const context = convoManager.getContext();
-      let intent = context.intent || 'create_bot';
-      let botConfig = { ...context.config };
-      if (type === 'clarify') botConfig = { ...botConfig, ...this.parseClarifyAnswer(input.answer, input.context) };
-      else if (type === 'command') intent = input.action;
-      else botConfig = input;
+    const context = convoManager.getContext();
+    let intent = context.intent || 'create_bot';
+    let botConfig = { ...context.config };
+    if (type === 'clarify') botConfig = { ...botConfig, ...this.parseClarifyAnswer(input.answer, input.context) };
+    else if (type === 'command') intent = input.action;
+    else botConfig = input;
 
-      if ((type === 'text' || type === 'voice') && (input.name?.toLowerCase().includes('another') || input.name?.toLowerCase().includes('similar'))) {
-        const lastConfig = convoManager.getLastBotConfig(botConfig.type);
-        if (lastConfig) botConfig = { ...lastConfig, name: `${lastConfig.name} Copy` };
-      }
-
-      if (!botConfig.type || !botConfig.name) intent = 'clarify';
-      convoManager.setIntent(intent, botConfig);
-      return { intent, botConfig };
-    } catch (error) {
-      console.error('Input analysis error:', error);
-      logError('Input analysis failed', error.message);
-      throw error;
+    if ((type === 'text' || type === 'voice') && (input.name?.toLowerCase().includes('another') || input.name?.toLowerCase().includes('similar'))) {
+      const lastConfig = convoManager.getLastBotConfig(botConfig.type);
+      if (lastConfig) botConfig = { ...lastConfig, name: `${lastConfig.name} Copy` };
     }
+
+    if (!botConfig.type || !botConfig.name) intent = 'clarify';
+    convoManager.setIntent(intent, botConfig);
+    return { intent, botConfig };
   }
 
   parseClarifyAnswer(answer, context) {
-    try {
-      const config = {};
-      if (!context.config.name) config.name = answer || 'Generic Bot';
-      if (!context.config.type) config.type = answer.match(/weather/i) ? 'weather' : answer.match(/twitter|tweet/i) ? 'twitter' : answer.match(/scrape/i) ? 'scraper' : answer.match(/custom/i) ? 'custom' : 'generic';
-      if (!context.config.code) config.code = this.generateCode(config.type || context.config.type, context.config.apiKey);
-      config.neural = answer.includes('neural');
-      config.apiKey = answer.match(/api key (.+?)(?:\s|$)/)?.[1] || context.config.apiKey;
-      config.schedule = answer.match(/every (\d+) minutes/i)?.[1] || context.config.schedule;
-      config.chain = answer.match(/chain (.+?)(?:\s|$)/)?.[1] || context.config.chain;
-      return config;
-    } catch (error) {
-      console.error('Clarify answer parsing error:', error);
-      logError('Clarify answer parsing failed', error.message);
-      throw error;
-    }
+    const config = {};
+    if (!context.config.name) config.name = answer || 'Generic Bot';
+    if (!context.config.type) config.type = answer.match(/weather/i) ? 'weather' : answer.match(/twitter|tweet/i) ? 'twitter' : answer.match(/scrape/i) ? 'scraper' : answer.match(/custom/i) ? 'custom' : 'generic';
+    if (!context.config.code) config.code = this.generateCode(config.type || context.config.type, context.config.apiKey);
+    config.neural = answer.includes('neural');
+    config.apiKey = answer.match(/api key (.+?)(?:\s|$)/)?.[1] || context.config.apiKey;
+    config.schedule = answer.match(/every (\d+) minutes/i)?.[1] || context.config.schedule;
+    config.chain = answer.match(/chain (.+?)(?:\s|$)/)?.[1] || context.config.chain;
+    return config;
   }
 
   generateCode(type, apiKey) {
-    try {
-      const templates = {
-        weather: `async function run() { return await (await fetch("https://api.openweathermap.org/data/2.5/weather?q=London&appid=${apiKey || 'YOUR_API_KEY'}")).json(); }`,
-        twitter: `async function run() { return { status: "Tweet posted" }; }`,
-        scraper: `async function run() { return await (await fetch("https://example.com")).text(); }`,
-        custom: `async function run() { return await (await fetch("YOUR_API_URL?key=${apiKey || 'YOUR_API_KEY'}")).json(); }`,
-        generic: '// Generic bot code'
-      };
-      return templates[type] || '// Generic bot code';
-    } catch (error) {
-      console.error('Code generation error:', error);
-      logError('Code generation failed', error.message);
-      throw error;
-    }
+    const templates = {
+      weather: `async function run() { return await (await fetch("https://api.openweathermap.org/data/2.5/weather?q=London&appid=${apiKey || 'YOUR_API_KEY'}")).json(); }`,
+      twitter: `async function run() { return { status: "Tweet posted" }; }`,
+      scraper: `async function run() { return await (await fetch("https://example.com")).text(); }`,
+      custom: `async function run() { return await (await fetch("YOUR_API_URL?key=${apiKey || 'YOUR_API_KEY'}")).json(); }`,
+      generic: '// Generic bot code'
+    };
+    return templates[type] || '// Generic bot code';
   }
 
   async generateResponse(analysis) {
-    try {
-      const mood = convoManager.getContext().mood;
-      if (analysis.intent === 'create_bot' && analysis.botConfig.name && analysis.botConfig.type) {
-        let suggestion = mood === 'excited' ? ' Hell yeah, this bot’s gonna dominate!' : mood === 'concerned' ? ' Let’s make this bot bulletproof.' : '';
-        if (this.feedbackScores.negative > 0) suggestion += ' Tip: Try specifying an API key or chain for advanced bots.';
-        return { message: `Forging ${analysis.botConfig.name} bot...${suggestion}`, action: { type: 'create_bot', params: analysis.botConfig }, emotion: mood };
-      } else if (analysis.intent.startsWith('batch_')) {
-        return { message: `Executing ${analysis.intent.replace('batch_', '')} on selected bots...`, action: { type: analysis.intent }, emotion: mood };
-      }
-      let clarify = !analysis.botConfig.name && !convoManager.hasAsked('What should the bot be named?') ? 'What should the bot be named?' :
-                    !analysis.botConfig.type && !convoManager.hasAsked('What type of bot do you want (e.g., weather, twitter, scraper, custom)?') ? 'What type of bot do you want (e.g., weather, twitter, scraper, custom)?' : '';
-      return { message: clarify || 'I need more details to create the bot.', clarify, emotion: mood };
-    } catch (error) {
-      console.error('Response generation error:', error);
-      logError('Response generation failed', error.message);
-      throw error;
+    const mood = convoManager.getContext().mood;
+    if (analysis.intent === 'create_bot' && analysis.botConfig.name && analysis.botConfig.type) {
+      let suggestion = mood === 'excited' ? ' Hell yeah, this bot’s gonna dominate!' : mood === 'concerned' ? ' Let’s make this bot bulletproof.' : '';
+      if (this.feedbackScores.negative > 0) suggestion += ' Tip: Try specifying an API key or chain for advanced bots.';
+      return { message: `Forging ${analysis.botConfig.name} bot...${suggestion}`, action: { type: 'create_bot', params: analysis.botConfig }, emotion: mood };
+    } else if (analysis.intent.startsWith('batch_')) {
+      return { message: `Executing ${analysis.intent.replace('batch_', '')} on selected bots...`, action: { type: analysis.intent }, emotion: mood };
     }
+    let clarify = !analysis.botConfig.name && !convoManager.hasAsked('What should the bot be named?') ? 'What should the bot be named?' :
+                  !analysis.botConfig.type && !convoManager.hasAsked('What type of bot do you want (e.g., weather, twitter, scraper, custom)?') ? 'What type of bot do you want (e.g., weather, twitter, scraper, custom)?' : '';
+    return { message: clarify || 'I need more details to create the bot.', clarify, emotion: mood };
   }
 
   showClarifyQuestion(question) {
-    try {
-      const clarifyDiv = document.getElementById('clarify-input');
-      document.getElementById('clarify-question').textContent = question;
-      clarifyDiv.classList.remove('hidden');
-    } catch (error) {
-      console.error('Clarify question error:', error);
-      logError('Clarify question display failed', error.message);
-    }
+    const clarifyDiv = document.getElementById('clarify-input');
+    document.getElementById('clarify-question').textContent = question;
+    clarifyDiv.classList.remove('hidden');
   }
 
   updateAvatar(emotion) {
-    try {
-      this.avatar.material.color.set(emotion === 'excited' ? 0xFF33FF : emotion === 'concerned' ? 0xFFFF33 : 0x33B5FF);
-    } catch (error) {
-      console.error('Avatar update error:', error);
-      logError('Avatar update failed', error.message);
-    }
+    this.avatar.material.color.set(emotion === 'excited' ? 0xFF33FF : emotion === 'concerned' ? 0xFFFF33 : 0x33B5FF);
   }
 
   async executeAction(action) {
-    try {
-      if (action.type === 'create_bot') {
-        const bot = await Bot.create(action.params);
-        await db.collection('logs').add({ message: `Bot ${action.params.name} created`, timestamp: Date.now() });
-        if (action.params.type !== 'generic') Bot.run(bot.id);
-        if (action.params.chain) Bot.chain(bot.id, action.params.chain);
-      } else if (action.type === 'batch_start') {
+    if (action.type === 'create_bot') {
+      const bot = await Bot.create(action.params);
+      await addDoc(collection(db, 'logs'), { message: `Bot ${action.params.name} created`, timestamp: Date.now() });
+      if (action.params.type !== 'generic') Bot.run(bot.id);
+      if (action.params.chain) Bot.chain(bot.id, action.params.chain);
+    } else if (action.type === 'batch_start') {
+      const selected = Array.from(document.querySelectorAll('.bot-item input:checked')).map(cb => cb.closest('.bot-item').dataset.id);
+      for (const id of selected) await Bot.start(id);
+    } else if (action.type === 'batch_stop') {
+      const selected = Array.from(document.querySelectorAll('.bot-item input:checked')).map(cb => cb.closest('.bot-item').dataset.id);
+      for (const id of selected) await Bot.stop(id);
+    } else if (action.type === 'batch_delete') {
+      showConfirmDialog('Delete all selected bots?', async () => {
         const selected = Array.from(document.querySelectorAll('.bot-item input:checked')).map(cb => cb.closest('.bot-item').dataset.id);
-        for (const id of selected) await Bot.start(id);
-      } else if (action.type === 'batch_stop') {
-        const selected = Array.from(document.querySelectorAll('.bot-item input:checked')).map(cb => cb.closest('.bot-item').dataset.id);
-        for (const id of selected) await Bot.stop(id);
-      } else if (action.type === 'batch_delete') {
-        showConfirmDialog('Delete all selected bots?', async () => {
-          const selected = Array.from(document.querySelectorAll('.bot-item input:checked')).map(cb => cb.closest('.bot-item').dataset.id);
-          for (const id of selected) await Bot.delete(id);
-        });
-      }
-    } catch (error) {
-      console.error('Action execution error:', error);
-      logError('Action execution failed', error.message);
-      throw error;
+        for (const id of selected) await Bot.delete(id);
+      });
     }
   }
 
   async checkBadges() {
-    try {
-      const bots = await idb.getAll('bots');
-      if (bots.length >= 10 && !this.badges.includes('bot_master')) {
-        this.badges.push('bot_master');
-        showToast('Badge Unlocked: Bot Master! Created 10+ bots.', 'success');
-        narrate('You’ve earned the Bot Master badge, Commander!');
-      }
-    } catch (error) {
-      console.error('Badge check error:', error);
-      logError('Badge check failed', error.message);
+    const bots = await IDB.getAll('bots');
+    if (bots.length >= 10 && !this.badges.includes('bot_master')) {
+      this.badges.push('bot_master');
+      showToast('Badge Unlocked: Bot Master! Created 10+ bots.', 'success');
+      narrate('You’ve earned the Bot Master badge, Commander!');
     }
   }
 
   updateFeedback(rating) {
-    try {
-      this.feedbackScores[rating === 'yes' ? 'positive' : 'negative']++;
-    } catch (error) {
-      console.error('Feedback update error:', error);
-      logError('Feedback update failed', error.message);
+    this.feedbackScores[rating === 'yes' ? 'positive' : 'negative']++;
+  }
+
+  handleWorkerMessage({ botId, result, error }) {
+    if (error) {
+      showToast(`Bot ${botId} failed: ${error}`, 'error');
+      IDB.update('bots', botId, { errors: (bot => bot.errors + 1)(IDB.get('bots', botId)) });
+      addDoc(collection(db, 'logs'), { message: `Bot ${botId} failed: ${error}`, timestamp: Date.now() });
+    } else {
+      showToast(`Bot ${botId} ran successfully: ${JSON.stringify(result).slice(0, 50)}`, 'success');
+      IDB.update('bots', botId, { runs: (bot => bot.runs + 1)(IDB.get('bots', botId)), totalRuntime: (bot => bot.totalRuntime + result.runtime)(IDB.get('bots', botId)) });
+      addDoc(collection(db, 'logs'), { message: `Bot ${botId} executed: ${JSON.stringify(result)}`, timestamp: Date.now() });
     }
+    Bot.updateAnalytics();
   }
 }
 
@@ -485,226 +438,149 @@ const ai = new UnifiedAI();
 
 class Bot {
   static async create(params) {
-    try {
-      const botId = Date.now().toString();
-      const bot = { id: botId, name: params.name, status: 'stopped', code: params.code, type: params.type, neural: params.neural, apiKey: params.apiKey, schedule: params.schedule, chain: params.chain, createdAt: new Date().toISOString(), version: 1, versions: [{ version: 1, code: params.code, timestamp: new Date().toISOString() }], runs: 0, errors: 0, totalRuntime: 0 };
-      await idb.set('bots', botId, bot);
-      await this.updateBotList();
-      addWidget('status', { x: Math.random() * 5, y: 1, z: Math.random() * 5 }, botId);
-      narrate(`Bot ${bot.name} forged in the galactic foundry.`);
-      hapticFeedback();
-      showToast(`Bot ${bot.name} created`, 'success');
-      if (bot.schedule) this.scheduleBot(botId, parseInt(bot.schedule));
-      return bot;
-    } catch (error) {
-      console.error('Bot creation error:', error);
-      logError('Bot creation failed', error.message);
-      throw error;
-    }
+    const botId = Date.now().toString();
+    const bot = { id: botId, name: params.name, status: 'stopped', code: params.code, type: params.type, neural: params.neural, apiKey: params.apiKey, schedule: params.schedule, chain: params.chain, createdAt: new Date().toISOString(), version: 1, versions: [{ version: 1, code: params.code, timestamp: new Date().toISOString() }], runs: 0, errors: 0, totalRuntime: 0 };
+    await IDB.set('bots', botId, bot);
+    await this.updateBotList();
+    addWidget('status', { x: Math.random() * 5, y: 1, z: Math.random() * 5 }, botId);
+    narrate(`Bot ${bot.name} forged in the galactic foundry.`);
+    showToast(`Bot ${bot.name} created`, 'success');
+    if (bot.schedule) this.scheduleBot(botId, parseInt(bot.schedule));
+    return bot;
   }
 
   static async start(botId) {
-    try {
-      await idb.update('bots', botId, { status: 'running' });
-      await this.updateBotList();
-      showToast(`Bot ${botId} started`, 'success');
-      narrate(`Bot ${botId} is now active.`);
-      await db.collection('logs').add({ message: `Bot ${botId} started`, timestamp: Date.now() });
-      this.run(botId);
-    } catch (error) {
-      console.error('Bot start error:', error);
-      logError('Bot start failed', error.message);
-      throw error;
-    }
+    await IDB.update('bots', botId, { status: 'running' });
+    await this.updateBotList();
+    showToast(`Bot ${botId} started`, 'success');
+    narrate(`Bot ${botId} is now active.`);
+    await addDoc(collection(db, 'logs'), { message: `Bot ${botId} started`, timestamp: Date.now() });
+    this.run(botId);
   }
 
   static async stop(botId) {
-    try {
-      await idb.update('bots', botId, { status: 'stopped' });
-      await this.updateBotList();
-      showToast(`Bot ${botId} stopped`, 'success');
-      narrate(`Bot ${botId} halted.`);
-      await db.collection('logs').add({ message: `Bot ${botId} stopped`, timestamp: Date.now() });
-    } catch (error) {
-      console.error('Bot stop error:', error);
-      logError('Bot stop failed', error.message);
-      throw error;
-    }
+    await IDB.update('bots', botId, { status: 'stopped' });
+    await this.updateBotList();
+    showToast(`Bot ${botId} stopped`, 'success');
+    narrate(`Bot ${botId} halted.`);
+    await addDoc(collection(db, 'logs'), { message: `Bot ${botId} stopped`, timestamp: Date.now() });
   }
 
   static async delete(botId) {
-    try {
-      await idb.delete('bots', botId);
-      await this.updateBotList();
-      showToast('Bot deleted', 'success');
-      narrate(`Bot ${botId} decommissioned.`);
-      await db.collection('logs').add({ message: `Bot ${botId} deleted`, timestamp: Date.now() });
-    } catch (error) {
-      console.error('Bot deletion error:', error);
-      logError('Bot deletion failed', error.message);
-      throw error;
-    }
+    await IDB.delete('bots', botId);
+    await this.updateBotList();
+    showToast('Bot deleted', 'success');
+    narrate(`Bot ${botId} decommissioned.`);
+    await addDoc(collection(db, 'logs'), { message: `Bot ${botId} deleted`, timestamp: Date.now() });
   }
 
   static async edit(botId, newCode) {
-    try {
-      const bot = await idb.get('bots', botId);
-      const isHighRisk = newCode.includes('delete') || newCode.includes('drop');
-      if (isHighRisk) {
-        showConfirmDialog('This code contains high-risk operations. Approve?', async () => {
-          const newVersion = bot.version + 1;
-          bot.versions.push({ version: newVersion, code: newCode, timestamp: new Date().toISOString() });
-          await idb.update('bots', botId, { code: newCode, version: newVersion, versions: bot.versions });
-          await this.updateBotList();
-          showToast('Bot code updated', 'success');
-          narrate(`Bot ${bot.name} code updated to version ${newVersion}.`);
-          await db.collection('logs').add({ message: `Bot ${botId} code updated`, timestamp: Date.now() });
-        });
-      } else {
+    const bot = await IDB.get('bots', botId);
+    const isHighRisk = newCode.includes('delete') || newCode.includes('drop');
+    if (isHighRisk) {
+      showConfirmDialog('This code contains high-risk operations. Approve?', async () => {
         const newVersion = bot.version + 1;
         bot.versions.push({ version: newVersion, code: newCode, timestamp: new Date().toISOString() });
-        await idb.update('bots', botId, { code: newCode, version: newVersion, versions: bot.versions });
+        await IDB.update('bots', botId, { code: newCode, version: newVersion, versions: bot.versions });
         await this.updateBotList();
         showToast('Bot code updated', 'success');
         narrate(`Bot ${bot.name} code updated to version ${newVersion}.`);
-        await db.collection('logs').add({ message: `Bot ${botId} code updated`, timestamp: Date.now() });
-      }
-    } catch (error) {
-      console.error('Bot edit error:', error);
-      logError('Bot edit failed', error.message);
-      throw error;
+        await addDoc(collection(db, 'logs'), { message: `Bot ${botId} code updated`, timestamp: Date.now() });
+      });
+    } else {
+      const newVersion = bot.version + 1;
+      bot.versions.push({ version: newVersion, code: newCode, timestamp: new Date().toISOString() });
+      await IDB.update('bots', botId, { code: newCode, version: newVersion, versions: bot.versions });
+      await this.updateBotList();
+      showToast('Bot code updated', 'success');
+      narrate(`Bot ${bot.name} code updated to version ${newVersion}.`);
+      await addDoc(collection(db, 'logs'), { message: `Bot ${botId} code updated`, timestamp: Date.now() });
     }
   }
 
   static async run(botId) {
-    try {
-      const startTime = performance.now();
-      const bot = await idb.get('bots', botId);
-      const func = new Function('return ' + bot.code)();
-      const result = await func();
-      const runtime = performance.now() - startTime;
-      await idb.update('bots', botId, { runs: bot.runs + 1, totalRuntime: bot.totalRuntime + runtime });
-      showToast(`Bot ${bot.name} ran successfully: ${JSON.stringify(result).slice(0, 50)}`, 'success');
-      await db.collection('logs').add({ message: `Bot ${bot.name} executed: ${JSON.stringify(result)}`, timestamp: Date.now() });
-      if (Notification.permission === 'granted') {
-        new Notification(`Bot ${bot.name} Result`, { body: JSON.stringify(result).slice(0, 100) });
-      }
-      Bot.updateAnalytics();
-    } catch (error) {
-      console.error('Bot run error:', error);
-      const bot = await idb.get('bots', botId);
-      await idb.update('bots', botId, { errors: bot.errors + 1 });
-      showToast(`Bot ${bot.name} failed: ${error.message}`, 'error');
-      await db.collection('logs').add({ message: `Bot ${bot.name} failed: ${error.message}`, timestamp: Date.now() });
-      if (Notification.permission === 'granted') {
-        new Notification(`Bot ${bot.name} Failed`, { body: error.message });
-      }
-      logError('Bot execution failed', error.message);
-      Bot.updateAnalytics();
-    }
+    const bot = await IDB.get('bots', botId);
+    ai.worker.postMessage({ botId, code: bot.code });
   }
 
   static scheduleBot(botId, minutes) {
-    try {
-      setInterval(async () => {
-        const bot = await idb.get('bots', botId);
-        if (bot.status === 'running') {
-          await this.run(botId);
-        }
-      }, minutes * 60 * 1000);
-      showToast(`Bot ${botId} scheduled to run every ${minutes} minutes`, 'info');
-      narrate(`Bot ${botId} scheduled for action.`);
-    } catch (error) {
-      console.error('Bot scheduling error:', error);
-      logError('Bot scheduling failed', error.message);
-    }
+    setInterval(async () => {
+      const bot = await IDB.get('bots', botId);
+      if (bot.status === 'running') {
+        await this.run(botId);
+      }
+    }, minutes * 60 * 1000);
+    showToast(`Bot ${botId} scheduled to run every ${minutes} minutes`, 'info');
+    narrate(`Bot ${botId} scheduled for action.`);
   }
 
   static async chain(botId, nextBotName) {
-    try {
-      const bots = await idb.getAll('bots');
-      const nextBot = bots.find(b => b.name.toLowerCase() === nextBotName.toLowerCase());
-      if (!nextBot) {
-        showToast(`Chained bot ${nextBotName} not found`, 'error');
-        return;
-      }
-      await this.run(botId);
-      await this.run(nextBot.id);
-      showToast(`Chained ${botId} to ${nextBot.name}`, 'success');
-      narrate(`Bots ${botId} and ${nextBot.name} chained for action.`);
-    } catch (error) {
-      console.error('Bot chaining error:', error);
-      logError('Bot chaining failed', error.message);
+    const bots = await IDB.getAll('bots');
+    const nextBot = bots.find(b => b.name.toLowerCase() === nextBotName.toLowerCase());
+    if (!nextBot) {
+      showToast(`Chained bot ${nextBotName} not found`, 'error');
+      return;
     }
+    await this.run(botId);
+    await this.run(nextBot.id);
+    showToast(`Chained ${botId} to ${nextBot.name}`, 'success');
+    narrate(`Bots ${botId} and ${nextBot.name} chained for action.`);
   }
 
   static async share(botIds, email) {
-    try {
-      const bots = await Promise.all(botIds.map(id => idb.get('bots', id)));
-      await db.collection('shared_bots').add({ bots, recipient: email, sender: auth.currentUser.email, timestamp: Date.now() });
-      showToast(`Bots shared with ${email}`, 'success');
-      narrate(`Bots sent to ${email}.`);
-    } catch (error) {
-      console.error('Bot sharing error:', error);
-      logError('Bot sharing failed', error.message);
-      throw error;
-    }
+    const bots = await Promise.all(botIds.map(id => IDB.get('bots', id)));
+    await addDoc(collection(db, 'shared_bots'), { bots, recipient: email, sender: auth.currentUser.email, timestamp: Date.now() });
+    showToast(`Bots shared with ${email}`, 'success');
+    narrate(`Bots sent to ${email}.`);
   }
 
   static async updateBotList() {
-    try {
-      const bots = await idb.getAll('bots');
-      document.getElementById('bot-list').innerHTML = bots.map(bot => `
-        <div class="bot-item" data-id="${bot.id}">
-          <input type="checkbox" class="bot-select">
-          ${bot.name} (${bot.type}${bot.neural ? ', Neural' : ''}) - ${bot.status} (v${bot.version})${bot.schedule ? ' [Every ${bot.schedule} min]' : ''}${bot.chain ? ' [Chain: ${bot.chain}]' : ''}
-          <button onclick="Bot.start('${bot.id}')">Start</button>
-          <button onclick="Bot.stop('${bot.id}')">Stop</button>
-          <button onclick="Bot.editView('${bot.id}')">Edit</button>
-          <button onclick="Bot.delete('${bot.id}')">Delete</button>
-        </div>
-      `).join('');
-      document.getElementById('batch-actions').classList.toggle('hidden', bots.length === 0);
-      document.querySelectorAll('.bot-select').forEach(cb => {
-        cb.addEventListener('change', () => {
-          const anyChecked = Array.from(document.querySelectorAll('.bot-select')).some(cb => cb.checked);
-          document.getElementById('batch-actions').classList.toggle('hidden', !anyChecked);
-        });
+    const bots = await IDB.getAll('bots');
+    document.getElementById('bot-list').innerHTML = bots.map(bot => `
+      <div class="bot-item" data-id="${bot.id}">
+        <input type="checkbox" class="bot-select">
+        ${bot.name} (${bot.type}${bot.neural ? ', Neural' : ''}) - ${bot.status} (v${bot.version})${bot.schedule ? ' [Every ${bot.schedule} min]' : ''}${bot.chain ? ' [Chain: ${bot.chain}]' : ''}
+        <button onclick="Bot.start('${bot.id}')">Start</button>
+        <button onclick="Bot.stop('${bot.id}')">Stop</button>
+        <button onclick="Bot.editView('${bot.id}')">Edit</button>
+        <button onclick="Bot.delete('${bot.id}')">Delete</button>
+      </div>
+    `).join('');
+    document.getElementById('batch-actions').classList.toggle('hidden', bots.length === 0);
+    document.querySelectorAll('.bot-select').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const anyChecked = Array.from(document.querySelectorAll('.bot-select')).some(cb => cb.checked);
+        document.getElementById('batch-actions').classList.toggle('hidden', !anyChecked);
       });
-    } catch (error) {
-      console.error('Bot list update error:', error);
-      logError('Bot list update failed', error.message);
-    }
+    });
   }
 
   static async updateAnalytics() {
-    try {
-      const bots = await idb.getAll('bots');
-      const ctx = document.getElementById('analytics-chart').getContext('2d');
-      new Chart(ctx, {
-        type: 'bar',
-        data: {
-          labels: bots.map(b => b.name),
-          datasets: [
-            { label: 'Runs', data: bots.map(b => b.runs), backgroundColor: '#33B5FF' },
-            { label: 'Errors', data: bots.map(b => b.errors), backgroundColor: '#FF3333' },
-            { label: 'Avg Runtime (ms)', data: bots.map(b => b.runs ? b.totalRuntime / b.runs : 0), backgroundColor: '#33FF33' }
-          ]
-        },
-        options: { scales: { y: { beginAtZero: true } } }
-      });
-    } catch (error) {
-      console.error('Analytics update error:', error);
-      logError('Analytics update failed', error.message);
-    }
+    const bots = await IDB.getAll('bots');
+    const ctx = document.getElementById('analytics-chart').getContext('2d');
+    if (window.analyticsChart) window.analyticsChart.destroy();
+    window.analyticsChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: bots.map(b => b.name),
+        datasets: [
+          { label: 'Runs', data: bots.map(b => b.runs), backgroundColor: '#33B5FF' },
+          { label: 'Errors', data: bots.map(b => b.errors), backgroundColor: '#FF3333' },
+          { label: 'Avg Runtime (ms)', data: bots.map(b => b.runs ? b.totalRuntime / b.runs : 0), backgroundColor: '#33FF33' }
+        ]
+      },
+      options: { scales: { y: { beginAtZero: true } } }
+    });
   }
 
   static editView(botId) {
-    try {
-      idb.get('bots', botId).then(bot => {
-        document.getElementById('edit-bot-name').textContent = `Editing ${bot.name}`;
-        document.getElementById('bots-tab').classList.add('hidden');
-        document.getElementById('edit-bot-tab').classList.remove('hidden');
+    IDB.get('bots', botId).then(bot => {
+      document.getElementById('edit-bot-name').textContent = `Editing ${bot.name}`;
+      document.getElementById('bots-tab').classList.add('hidden');
+      document.getElementById('edit-bot-tab').classList.remove('hidden');
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.33.0/min/vs/loader.min.js';
+      script.onload = () => {
         require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.33.0/min/vs' } });
         require(['vs/editor/editor.main'], () => {
           const editor = monaco.editor.create(document.getElementById('code-editor'), {
@@ -719,130 +595,87 @@ class Bot {
             document.getElementById('bots-tab').classList.remove('hidden');
           };
         });
-      });
-    } catch (error) {
-      console.error('Bot edit view error:', error);
-      logError('Bot edit view failed', error.message);
-    }
+      };
+      document.body.appendChild(script);
+    });
   }
 }
-
-const idb = {
-  async set(store, key, value) {
-    return new Promise((resolve, reject) => {
-      try {
-        const openRequest = indexedDB.open('SmartHubDB', 1);
-        openRequest.onupgradeneeded = e => e.target.result.createObjectStore('bots', { keyPath: 'id' });
-        openRequest.onsuccess = e => {
-          const db = e.target.result;
-          const tx = db.transaction([store], 'readwrite');
-          tx.objectStore(store).put(value).onsuccess = () => resolve();
-        };
-        openRequest.onerror = e => reject(e);
-      } catch (error) {
-        console.error('IDB set error:', error);
-        logError('IDB set failed', error.message);
-        reject(error);
-      }
-    });
-  },
-  async delete(store, key) {
-    return new Promise((resolve, reject) => {
-      try {
-        const openRequest = indexedDB.open('SmartHubDB', 1);
-        openRequest.onsuccess = e => {
-          const db = e.target.result;
-          const tx = db.transaction([store], 'readwrite');
-          tx.objectStore(store).delete(key).onsuccess = () => resolve();
-        };
-        openRequest.onerror = e => reject(e);
-      } catch (error) {
-        console.error('IDB delete error:', error);
-        logError('IDB delete failed', error.message);
-        reject(error);
-      }
-    });
-  },
-  async update(store, key, updates) {
-    return new Promise((resolve, reject) => {
-      try {
-        const openRequest = indexedDB.open('SmartHubDB', 1);
-        openRequest.onsuccess = e => {
-          const db = e.target.result;
-          const tx = db.transaction([store], 'readwrite');
-          const storeObj = tx.objectStore(store);
-          storeObj.get(key).onsuccess = ev => storeObj.put({ ...ev.target.result, ...updates }).onsuccess = () => resolve();
-        };
-        openRequest.onerror = e => reject(e);
-      } catch (error) {
-        console.error('IDB update error:', error);
-        logError('IDB update failed', error.message);
-        reject(error);
-      }
-    });
-  },
-  async get(store, key) {
-    return new Promise((resolve, reject) => {
-      try {
-        const openRequest = indexedDB.open('SmartHubDB', 1);
-        openRequest.onsuccess = e => {
-          const db = e.target.result;
-          const tx = db.transaction([store], 'readonly');
-          tx.objectStore(store).get(key).onsuccess = ev => resolve(ev.target.result);
-        };
-        openRequest.onerror = e => reject(e);
-      } catch (error) {
-        console.error('IDB get error:', error);
-        logError('IDB get failed', error.message);
-        reject(error);
-      }
-    });
-  },
-  async getAll(store) {
-    return new Promise((resolve, reject) => {
-      try {
-        const openRequest = indexedDB.open('SmartHubDB', 1);
-        openRequest.onsuccess = e => {
-          const db = e.target.result;
-          const tx = db.transaction([store], 'readonly');
-          tx.objectStore(store).getAll().onsuccess = ev => resolve(ev.target.result);
-        };
-        openRequest.onerror = e => reject(e);
-      } catch (error) {
-        console.error('IDB getAll error:', error);
-        logError('IDB getAll failed', error.message);
-        reject(error);
-      }
-    });
-  }
-};
 
 async function loadLogs(search = '') {
-  try {
-    let query = db.collection('logs').orderBy('timestamp', 'desc').limit(10);
-    if (search) {
-      query = query.where('message', '>=', search).where('message', '<=', search + '\uf8ff');
-    }
-    const logs = await query.get();
-    document.getElementById('log-list').innerHTML = logs.docs.map(doc => `<div class="bot-item">${doc.data().message}</div>`).join('');
-  } catch (error) {
-    console.error('Log loading error:', error);
-    logError('Log loading failed', error.message);
+  let q = query(collection(db, 'logs'), orderBy('timestamp', 'desc'), limit(10));
+  if (search) {
+    q = query(collection(db, 'logs'), where('message', '>=', search), where('message', '<=', search + '\uf8ff'), orderBy('timestamp', 'desc'), limit(10));
   }
+  const logs = await getDocs(q);
+  document.getElementById('log-list').innerHTML = logs.docs.map(doc => `<div class="bot-item">${doc.data().message}</div>`).join('');
 }
+
+// Authentication
+document.getElementById('sign-in-btn').addEventListener('click', async () => {
+  try {
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
+    await signInWithEmailAndPassword(auth, email, password);
+    showToast('Signed in successfully', 'success');
+    narrate('You are now logged into the Smart Hub.');
+  } catch (error) {
+    showToast(`Login failed: ${error.message}`, 'error');
+    document.getElementById('auth-error').textContent = error.message;
+    document.getElementById('auth-error').classList.remove('hidden');
+    logError('Login failed', error.message);
+  }
+});
+
+document.getElementById('sign-up-btn').addEventListener('click', async () => {
+  try {
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
+    await createUserWithEmailAndPassword(auth, email, password);
+    showToast('Account created successfully', 'success');
+    narrate('Your account has been created. Welcome to the galaxy!');
+  } catch (error) {
+    showToast(`Signup failed: ${error.message}`, 'error');
+    document.getElementById('auth-error').textContent = error.message;
+    document.getElementById('auth-error').classList.remove('hidden');
+    logError('Signup failed', error.message);
+  }
+});
+
+document.getElementById('logout-btn').addEventListener('click', async () => {
+  await signOut(auth);
+  showToast('Logged out', 'info');
+  narrate('You have logged out. The galaxy awaits your return.');
+});
+
+onAuthStateChanged(auth, async user => {
+  try {
+    if (user) {
+      document.getElementById('login-modal').classList.add('hidden');
+      document.getElementById('hub-main').classList.remove('hidden');
+      document.getElementById('metaverse-canvas').classList.remove('hidden');
+      await loadLogs();
+      await Bot.updateBotList();
+      await Bot.updateAnalytics();
+      if (Notification.permission !== 'granted') Notification.requestPermission();
+      setupPushNotifications();
+    } else {
+      document.getElementById('hub-main').classList.add('hidden');
+      document.getElementById('metaverse-canvas').classList.add('hidden');
+      document.getElementById('login-modal').classList.remove('hidden');
+    }
+    document.getElementById('loading').classList.add('hidden');
+  } catch (error) {
+    showError(`Auth error: ${error.message}`);
+    logError('Auth state change failed', error.message);
+  }
+});
 
 // Event Listeners
 document.getElementById('voice-input-btn').addEventListener('click', () => {
-  try {
-    const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-    recognition.lang = 'en-US';
-    recognition.start();
-    recognition.onresult = e => ai.processInput(e.results[0][0].transcript, e.results[0][0].transcript.includes('all') ? 'command' : 'voice');
-  } catch (error) {
-    console.error('Voice input error:', error);
-    logError('Voice input failed', error.message);
-    showToast('Voice recognition failed', 'error');
-  }
+  const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+  recognition.lang = 'en-US';
+  recognition.start();
+  recognition.onresult = e => ai.processInput(e.results[0][0].transcript, e.results[0][0].transcript.includes('all') ? 'command' : 'voice');
 });
 
 document.getElementById('text-input-btn').addEventListener('click', () => {
@@ -850,79 +683,42 @@ document.getElementById('text-input-btn').addEventListener('click', () => {
 });
 
 document.getElementById('submit-text').addEventListener('click', () => {
-  try {
-    const description = document.getElementById('text-answer').value;
-    if (description) {
-      ai.processInput(description, 'text');
-      document.getElementById('text-input').classList.add('hidden');
-    }
-  } catch (error) {
-    console.error('Text submit error:', error);
-    logError('Text submit failed', error.message);
+  const description = document.getElementById('text-answer').value;
+  if (description) {
+    ai.processInput(description, 'text');
+    document.getElementById('text-input').classList.add('hidden');
   }
 });
 
 document.getElementById('submit-clarify').addEventListener('click', () => {
-  try {
-    const answer = document.getElementById('clarify-answer').value;
-    if (answer) ai.processInput(answer, 'clarify');
-  } catch (error) {
-    console.error('Clarify submit error:', error);
-    logError('Clarify submit failed', error.message);
-  }
+  const answer = document.getElementById('clarify-answer').value;
+  if (answer) ai.processInput(answer, 'clarify');
 });
 
 document.getElementById('file-upload').addEventListener('drop', async e => {
-  try {
-    e.preventDefault();
-    for (const file of e.dataTransfer.files) await ai.processInput(file, 'file');
-  } catch (error) {
-    console.error('File drop error:', error);
-    logError('File drop failed', error.message);
-  }
+  e.preventDefault();
+  for (const file of e.dataTransfer.files) await ai.processInput(file, 'file');
 });
 
 document.getElementById('file-input').addEventListener('change', async e => {
-  try {
-    for (const file of e.target.files) await ai.processInput(file, 'file');
-  } catch (error) {
-    console.error('File input error:', error);
-    logError('File input failed', error.message);
-  }
+  for (const file of e.target.files) await ai.processInput(file, 'file');
 });
 
 document.getElementById('feedback-yes').addEventListener('click', async () => {
-  try {
-    await db.collection('feedback').add({ rating: 'yes', timestamp: Date.now() });
-    ai.updateFeedback('yes');
-    showToast('Thanks for your feedback!', 'success');
-    document.getElementById('feedback').classList.add('hidden');
-  } catch (error) {
-    console.error('Feedback yes error:', error);
-    logError('Feedback yes failed', error.message);
-  }
+  await addDoc(collection(db, 'feedback'), { rating: 'yes', timestamp: Date.now() });
+  ai.updateFeedback('yes');
+  showToast('Thanks for your feedback!', 'success');
+  document.getElementById('feedback').classList.add('hidden');
 });
 
 document.getElementById('feedback-no').addEventListener('click', async () => {
-  try {
-    await db.collection('feedback').add({ rating: 'no', timestamp: Date.now() });
-    ai.updateFeedback('no');
-    showToast('Thanks for your feedback!', 'success');
-    document.getElementById('feedback').classList.add('hidden');
-  } catch (error) {
-    console.error('Feedback no error:', error);
-    logError('Feedback no failed', error.message);
-  }
+  await addDoc(collection(db, 'feedback'), { rating: 'no', timestamp: Date.now() });
+  ai.updateFeedback('no');
+  showToast('Thanks for your feedback!', 'success');
+  document.getElementById('feedback').classList.add('hidden');
 });
 
-document.getElementById('log-search').addEventListener('input', e => {
-  try {
-    loadLogs(e.target.value);
-  } catch (error) {
-    console.error('Log search error:', error);
-    logError('Log search failed', error.message);
-  }
-});
+document.getElementById('log-search').addEventListener('input', e => loadLogs(e.target.value));
 
 document.getElementById('bots-back-btn').addEventListener('click', () => {
   document.getElementById('bots-tab').classList.add('hidden');
@@ -970,18 +766,13 @@ document.getElementById('batch-share').addEventListener('click', () => {
 });
 
 document.getElementById('share-submit').addEventListener('click', async () => {
-  try {
-    const email = document.getElementById('share-email').value;
-    const selected = Array.from(document.querySelectorAll('.bot-item input:checked')).map(cb => cb.closest('.bot-item').dataset.id);
-    if (email && selected.length) {
-      await Bot.share(selected, email);
-      document.getElementById('share-panel').classList.add('hidden');
-    } else {
-      showToast('Enter an email and select bots', 'error');
-    }
-  } catch (error) {
-    console.error('Share submit error:', error);
-    logError('Share submit failed', error.message);
+  const email = document.getElementById('share-email').value;
+  const selected = Array.from(document.querySelectorAll('.bot-item input:checked')).map(cb => cb.closest('.bot-item').dataset.id);
+  if (email && selected.length) {
+    await Bot.share(selected, email);
+    document.getElementById('share-panel').classList.add('hidden');
+  } else {
+    showToast('Enter an email and select bots', 'error');
   }
 });
 
@@ -1001,35 +792,31 @@ document.getElementById('theme-toggle').addEventListener('click', () => {
   narrate(`Theme switched to ${next}.`);
 });
 
-// Click Outside to Close Panels
 document.addEventListener('click', e => {
   const panels = ['template-panel', 'share-panel', 'clarify-input', 'text-input'];
-  if (!e.target.closest('.panel, .modal, .btn')) {
+  if (!e.target.closest('.panel, .modal, .btn, .avatar-panel')) {
     panels.forEach(id => document.getElementById(id).classList.add('hidden'));
   }
 });
 
-// Swipe Gestures
-let touchstartX = 0;
-let touchendX = 0;
-document.addEventListener('touchstart', e => touchstartX = e.changedTouches[0].screenX);
+let touchstartX = 0, touchstartY = 0, touchendX = 0, touchendY = 0;
+document.addEventListener('touchstart', e => {
+  touchstartX = e.changedTouches[0].screenX;
+  touchstartY = e.changedTouches[0].screenY;
+});
 document.addEventListener('touchend', e => {
-  try {
-    touchendX = e.changedTouches[0].screenX;
-    if (touchendX < touchstartX - 50) {
-      const tabs = ['bots', 'logs', 'analytics'];
-      const active = document.querySelector('.tab-btn.active').dataset.tab;
-      const next = tabs[(tabs.indexOf(active) + 1) % tabs.length];
-      document.querySelector(`[data-tab="${next}"]`).click();
-    } else if (touchendX > touchstartX + 50) {
-      const tabs = ['bots', 'logs', 'analytics'];
-      const active = document.querySelector('.tab-btn.active').dataset.tab;
-      const prev = tabs[(tabs.indexOf(active) - 1 + tabs.length) % tabs.length];
-      document.querySelector(`[data-tab="${prev}"]`).click();
-    }
-  } catch (error) {
-    console.error('Swipe gesture error:', error);
-    logError('Swipe gesture failed', error.message);
+  touchendX = e.changedTouches[0].screenX;
+  touchendY = e.changedTouches[0].screenY;
+  if (touchendX < touchstartX - 50) {
+    const tabs = ['bots', 'logs', 'analytics'];
+    const active = document.querySelector('.tab-btn.active').dataset.tab;
+    const next = tabs[(tabs.indexOf(active) + 1) % tabs.length];
+    document.querySelector(`[data-tab="${next}"]`).click();
+  } else if (touchendX > touchstartX + 50) {
+    const tabs = ['bots', 'logs', 'analytics'];
+    const active = document.querySelector('.tab-btn.active').dataset.tab;
+    const prev = tabs[(tabs.indexOf(active) - 1 + tabs.length) % tabs.length];
+    document.querySelector(`[data-tab="${prev}"]`).click();
   }
 });
 
@@ -1041,6 +828,9 @@ try {
   renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('metaverse-canvas'), alpha: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   scene.background = new THREE.Color(0x0D1B2A);
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.05;
 
   const room = new THREE.Mesh(new THREE.PlaneGeometry(8, 8), new THREE.MeshBasicMaterial({ color: 0x33B5FF, opacity: 0.3, transparent: true, side: THREE.DoubleSide }));
   room.rotation.x = Math.PI / 2;
@@ -1056,100 +846,45 @@ try {
 }
 
 function addWidget(type, position, botId) {
-  try {
-    const widget = new THREE.Mesh(new THREE.SphereGeometry(0.3), new THREE.MeshBasicMaterial({ color: type === 'status' ? 0xFF3333 : 0x33B5FF }));
-    widget.position.set(position.x, position.y, position.z);
-    widget.userData = { botId };
-    scene.add(widget);
-  } catch (error) {
-    console.error('Widget add error:', error);
-    logError('Widget add failed', error.message);
-  }
+  const widget = new THREE.Mesh(new THREE.SphereGeometry(0.3), new THREE.MeshBasicMaterial({ color: type === 'status' ? 0xFF3333 : 0x33B5FF }));
+  widget.position.set(position.x, position.y, position.z);
+  widget.userData = { botId };
+  scene.add(widget);
 }
 
 function animate() {
-  try {
-    requestAnimationFrame(animate);
-    scene.children.forEach(child => {
-      if (child.geometry.type === 'SphereGeometry') child.position.y = Math.sin(Date.now() * 0.002 + child.position.x) * 0.3 + 1;
-    });
-    renderer.render(scene, camera);
-  } catch (error) {
-    console.error('Animation error:', error);
-    logError('Animation failed', error.message);
-  }
+  requestAnimationFrame(animate);
+  scene.children.forEach(child => {
+    if (child.geometry.type === 'SphereGeometry') child.position.y = Math.sin(Date.now() * 0.002 + child.position.x) * 0.3 + 1;
+  });
+  controls.update();
+  renderer.render(scene, camera);
 }
 if (renderer?.getContext()) animate();
 
 document.getElementById('metaverse-canvas').addEventListener('click', e => {
-  try {
-    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-    raycaster.setFromCamera(mouse, camera);
-    const intersects = raycaster.intersectObjects(scene.children);
-    if (intersects.length > 0) {
-      const botId = intersects[0].object.userData.botId;
-      if (botId) {
-        idb.get('bots', botId).then(bot => {
-          showToast(`Bot: ${bot.name} (${bot.status})`, 'info');
-          narrate(`Selected bot ${bot.name}.`);
-          Bot.editView(botId);
-        });
-      }
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+  const intersects = raycaster.intersectObjects(scene.children);
+  if (intersects.length > 0) {
+    const botId = intersects[0].object.userData.botId;
+    if (botId) {
+      IDB.get('bots', botId).then(bot => {
+        showToast(`Bot: ${bot.name} (${bot.status})`, 'info');
+        narrate(`Selected bot ${bot.name}.`);
+        Bot.editView(botId);
+      });
     }
-  } catch (error) {
-    console.error('Metaverse click error:', error);
-    logError('Metaverse click failed', error.message);
-  }
-});
-
-auth.onAuthStateChanged(async user => {
-  try {
-    if (user) {
-      document.getElementById('loading').classList.add('hidden');
-      document.getElementById('login-modal').classList.add('hidden');
-      document.getElementById('hub-main').classList.remove('hidden');
-      document.getElementById('metaverse-canvas').classList.remove('hidden');
-      await loadLogs();
-      await Bot.updateBotList();
-      await Bot.updateAnalytics();
-      if (Notification.permission !== 'granted') Notification.requestPermission();
-    } else {
-      document.getElementById('loading').classList.add('hidden');
-      document.getElementById('hub-main').classList.add('hidden');
-      document.getElementById('login-modal').classList.remove('hidden');
-      document.getElementById('metaverse-canvas').classList.add('hidden');
-    }
-  } catch (error) {
-    console.error('Auth state error:', error);
-    logError('Auth state change failed', error.message);
-    document.getElementById('loading').classList.add('hidden');
-    document.getElementById('error').classList.remove('hidden');
-    document.getElementById('error-message').textContent = 'Authentication error. Please retry.';
   }
 });
 
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
-    try {
-      document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add('hidden'));
-      document.getElementById(`${btn.dataset.tab}-tab`).classList.remove('hidden');
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      narrate(`Navigating to ${btn.dataset.tab} sector.`);
-    } catch (error) {
-      console.error('Tab switch error:', error);
-      logError('Tab switch failed', error.message);
-    }
+    document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add('hidden'));
+    document.getElementById(`${btn.dataset.tab}-tab`).classList.remove('hidden');
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    narrate(`Navigating to ${btn.dataset.tab} sector.`);
   });
-});
-
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('loading').classList.add('hidden');
-  if (auth.currentUser) {
-    document.getElementById('hub-main').classList.remove('hidden');
-    document.getElementById('metaverse-canvas').classList.remove('hidden');
-  } else {
-    document.getElementById('login-modal').classList.remove('hidden');
-  }
 });
