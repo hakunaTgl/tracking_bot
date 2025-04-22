@@ -16,7 +16,7 @@ body {
   color: var(--text-light);
   font-family: 'Orbitron', sans-serif;
   margin: 0;
-  overflow: hidden;
+  overflow-x: hidden;
   touch-action: manipulation;
   transition: background 0.5s, color 0.5s;
 }
@@ -49,11 +49,11 @@ body.light {
   padding: 20px;
   color: var(--text-light);
   z-index: 10;
-  transition: transform 0.3s, opacity 0.3s;
+  transition: transform 0.3s ease, opacity 0.3s ease;
 }
 
 .panel.hidden, .modal.hidden, .avatar-panel.hidden {
-  transform: scale(0.8);
+  transform: scale(0.95);
   opacity: 0;
   pointer-events: none;
 }
@@ -66,6 +66,8 @@ body.light {
   cursor: pointer;
   transition: transform 0.2s, box-shadow 0.2s;
   box-shadow: var(--neon-glow);
+  font-size: 1.1em;
+  touch-action: manipulation;
 }
 
 .btn:hover, .btn:active {
@@ -98,6 +100,7 @@ body.light {
   color: var(--text-light);
   font-size: 1.2em;
   cursor: pointer;
+  padding: 10px;
 }
 
 .tab-btn.active {
@@ -137,14 +140,16 @@ body.light {
   padding: 12px 24px;
   border-radius: 8px;
   box-shadow: var(--neon-glow);
+  z-index: 100;
 }
 
 .bot-item {
   background: var(--glass-bg);
-  padding: 10px;
+  padding: 12px;
   margin: 10px 0;
   border-radius: 8px;
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   box-shadow: var(--neon-glow);
@@ -157,12 +162,28 @@ body.light {
 .template-option {
   display: block;
   width: 100%;
-  margin: 5px 0;
-  padding: 10px;
+  margin: 8px 0;
+  padding: 12px;
   background: var(--blue-primary);
   border: none;
   color: var(--text-light);
   cursor: pointer;
+  font-size: 1em;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress {
+  width: 0;
+  height: 100%;
+  background: var(--blue-primary);
+  transition: width 0.5s ease;
 }
 
 .hidden {
@@ -171,7 +192,10 @@ body.light {
 
 @media (max-width: 600px) {
   .tab-nav { flex-direction: column; }
-  .tab-btn { margin-bottom: 10px; }
-  .avatar-panel { width: 100%; right: 0; }
-  .modal-content, .panel { width: 90%; }
+  .tab-btn { margin-bottom: 10px; font-size: 1em; }
+  .avatar-panel { width: 100%; right: 0; bottom: 10px; }
+  .modal-content, .panel { width: 90%; margin: 0 auto; }
+  .btn { padding: 10px 20px; font-size: 1em; }
+  .bot-item { flex-direction: column; align-items: flex-start; }
+  .bot-item button { margin: 5px 0; width: 100%; }
 }
