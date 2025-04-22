@@ -1,122 +1,25 @@
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js';
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js';
-import { getFirestore, collection, addDoc, query, orderBy, limit, getDocs, where } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js';
-import { getMessaging, getToken, onMessage } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging.js';
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.141.0/build/three.module.js';
-import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.141.0/examples/jsm/controls/OrbitControls.js';
-import { Chart } from 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.esm.js';
-
-const firebaseConfig = {
-  apiKey: "AIzaSyBONwaRl23VeTJISmiQ3X-t3y6FGK7Ngjc",
-  authDomain: "tglsmarthub.firebaseapp.com",
-  projectId: "tglsmarthub",
-  storageBucket: "tglsmarthub.firebasestorage.app",
-  messagingSenderId: "361291241205",
-  appId: "1:361291241205:web:854f79a0238e6e4795d7bc",
-  measurementId: "G-LQ4BP8GG37"
-};
-
-try {
-  initializeApp(firebaseConfig);
-  console.log('Firebase initialized');
-  document.getElementById('loading')?.classList.add('hidden');
-} catch (error) {
-  console.error('Firebase init error:', error);
-  showError(`Failed to initialize Firebase: ${error.message}`);
-}
-const auth = getAuth();
-const db = getFirestore();
-const messaging = getMessaging();
-
-function showToast(message, type = 'info') {
-  const toast = document.getElementById('toast');
-  toast.textContent = message;
-  toast.className = `toast ${type}`;
-  toast.classList.remove('hidden');
-  setTimeout(() => toast.classList.add('hidden'), 3000);
-  hapticFeedback();
-}
-
-function showError(message) {
-  document.getElementById('loading').classList.add('hidden');
-  document.getElementById('error').classList.remove('hidden');
-  document.getElementById('error-message').textContent = message;
-}
-
-function hapticFeedback(duration = 50) {
-  if (navigator.vibrate) navigator.vibrate(duration);
-}
-
-function narrate(message) {
-  try {
-    const utterance = new SpeechSynthesisUtterance(`Commander, ${message}`);
-    utterance.rate = 0.9;
-    speechSynthesis.speak(utterance);
-  } catch (error) {
-    console.error('Narration error:', error);
-    logError('Narration failed', error.message);
-  }
-}
-
-function showConfirmDialog(message, onConfirm) {
-  const dialog = document.getElementById('confirm-dialog');
-  document.getElementById('confirm-message').textContent = message;
-  dialog.classList.remove('hidden');
-  const yesBtn = document.getElementById('confirm-yes');
-  const noBtn = document.getElementById('confirm-no');
-  const handleYes = () => {
-    onConfirm();
-    dialog.classList.add('hidden');
-    yesBtn.removeEventListener('click', handleYes);
-    noBtn.removeEventListener('click', handleNo);
-  };
-  const handleNo = () => {
-    dialog.classList.add('hidden');
-    yesBtn.removeEventListener('click', handleYes);
-    noBtn.removeEventListener('click', handleNo);
-  };
-  yesBtn.addEventListener('click', handleYes);
-  noBtn.addEventListener('click', handleNo);
-}
-
-async function logError(message, details) {
-  try {
-    await addDoc(collection(db, 'errors'), { message, details, timestamp: Date.now(), user: auth.currentUser?.uid });
-  } catch (error) {
-    console.error('Error logging failed:', error);
-  }
-}
-
-function setupPushNotifications() {
-  try {
-    getToken(messaging, { vapidKey: 'YOUR_VAPID_KEY' }).then(token => {
-      if (token) {
-        addDoc(collection(db, 'users'), { uid: auth.currentUser.uid, pushToken: token });
-      }
-    }).catch(err => console.error('Push token error:', err));
-    onMessage(messaging, payload => {
-      showToast(payload.notification.body, 'info');
-      narrate(payload.notification.body);
-    });
-  } catch (error) {
-    console.error('Push setup error:', error);
-    logError('Push setup failed', error.message);
-  }
-}
-
 class IDB {
   static async init() {
-    return new Promise((resolve, reject) => {
-      const openRequest = indexedDB.open('SmartHubDB', 2);
-      openRequest.onupgradeneeded = e => {
-        const db = e.target.result;
-        if (!db.objectStoreNames.contains('bots')) {
-          db.createObjectStore('bots', { keyPath: 'id' });
-        }
-      };
-      openRequest.onsuccess = e => resolve(e.target.result);
-      openRequest.onerror = e => reject(e);
-    });
+    for (let i = 0; i < 3; i++) { // Retry DB init
+      try {
+        return await new Promise((resolve, reject) => {
+          const openRequest = indexedDB.open('SmartHubDB', 2);
+          openRequest.onupgradeneeded = e => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains('bots')) db.createObjectStore('bots', { keyPath: 'id' });
+            if (!db.objectStoreNames.contains('logs')) db.createObjectStore('logs', { keyPath: 'id' });
+            if (!db.objectStoreNames.contains('users')) db.createObjectStore('users', { keyPath: 'email' });
+            if (!db.objectStoreNames.contains('settings')) db.createObjectStore('settings', { keyPath: 'key' });
+          };
+          openRequest.onsuccess = e => resolve(e.target.result);
+          openRequest.onerror = e => reject(e);
+        });
+      } catch (error) {
+        console.error(`IndexedDB init failed (attempt ${i + 1}):`, error);
+        if (i === 2) throw error;
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
   }
 
   static async set(store, key, value) {
@@ -164,7 +67,222 @@ class IDB {
       tx.onerror = e => reject(e);
     });
   }
+
+  // Compress logs to last 100 entries
+  static async compressLogs() {
+    let logs = await this.getAll('logs');
+    if (logs.length > 100) {
+      logs.sort((a, b) => b.timestamp - a.timestamp);
+      logs = logs.slice(0, 100);
+      const db = await this.init();
+      const tx = db.transaction(['logs'], 'readwrite');
+      const store = tx.objectStore('logs');
+      store.clear();
+      logs.forEach(log => store.put(log));
+    }
+  }
 }
+
+function showToast(message, type = 'info') {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.className = `toast ${type}`;
+  toast.classList.remove('hidden');
+  setTimeout(() => toast.classList.add('hidden'), 3000);
+  hapticFeedback();
+}
+
+function showError(message) {
+  document.getElementById('loading').classList.add('hidden');
+  document.getElementById('error').classList.remove('hidden');
+  document.getElementById('error-message').textContent = message;
+  IDB.set('logs', Date.now().toString(), { message: `Error: ${message}`, timestamp: Date.now() });
+  updateDebugPanel();
+}
+
+function hapticFeedback(duration = 50) {
+  if (navigator.vibrate) navigator.vibrate(duration);
+}
+
+function narrate(message) {
+  if (!document.getElementById('enable-narration')?.checked) return;
+  try {
+    const utterance = new SpeechSynthesisUtterance(`Commander, ${message}`);
+    utterance.rate = 0.9;
+    speechSynthesis.speak(utterance);
+  } catch (error) {
+    console.error('Narration error:', error);
+    IDB.set('logs', Date.now().toString(), { message: `Narration failed: ${error.message}`, timestamp: Date.now() });
+  }
+}
+
+function showConfirmDialog(message, onConfirm) {
+  const dialog = document.getElementById('confirm-dialog');
+  document.getElementById('confirm-message').textContent = message;
+  dialog.classList.remove('hidden');
+  const yesBtn = document.getElementById('confirm-yes');
+  const noBtn = document.getElementById('confirm-no');
+  const handleYes = () => {
+    onConfirm();
+    dialog.classList.add('hidden');
+    yesBtn.removeEventListener('click', handleYes);
+    noBtn.removeEventListener('click', handleNo);
+  };
+  const handleNo = () => {
+    dialog.classList.add('hidden');
+    yesBtn.removeEventListener('click', handleYes);
+    noBtn.removeEventListener('click', handleNo);
+  };
+  yesBtn.addEventListener('click', handleYes);
+  noBtn.addEventListener('click', handleNo);
+}
+
+// Debug panel
+async function updateDebugPanel() {
+  const logs = await IDB.getAll('logs');
+  logs.sort((a, b) => b.timestamp - a.timestamp);
+  document.getElementById('debug-logs').innerHTML = logs.slice(0, 5).map(log => `<div>${log.message}</div>`).join('');
+  document.getElementById('debug-panel').classList.remove('hidden');
+}
+
+document.getElementById('close-debug')?.addEventListener('click', () => {
+  document.getElementById('debug-panel').classList.add('hidden');
+});
+
+// Authentication
+async function signIn(email, password) {
+  try {
+    if (!email || !password) throw new Error('Email and password are required');
+    const user = await IDB.get('users', email);
+    if (!user) throw new Error('User not found');
+    if (user.password !== password) throw new Error('Incorrect password');
+    localStorage.setItem('currentUser', email);
+    document.getElementById('login-modal').classList.add('hidden');
+    document.getElementById('hub-main').classList.remove('hidden');
+    if (document.getElementById('enable-metaverse').checked) {
+      document.getElementById('metaverse-canvas').classList.remove('hidden');
+      loadMetaverse();
+    }
+    showToast('Signed in successfully', 'success');
+    narrate('You are now logged into the Smart Hub.');
+    await IDB.set('logs', Date.now().toString(), { message: `User ${email} signed in`, timestamp: Date.now() });
+    await Bot.updateBotList();
+    await Bot.updateAnalytics();
+    await loadLogs();
+  } catch (error) {
+    showToast(`Login failed: ${error.message}`, 'error');
+    document.getElementById('auth-error').textContent = error.message;
+    document.getElementById('auth-error').classList.remove('hidden');
+    IDB.set('logs', Date.now().toString(), { message: `Login failed: ${error.message}`, timestamp: Date.now() });
+  }
+}
+
+async function signUp(email, password) {
+  try {
+    if (!email || !password) throw new Error('Email and password are required');
+    const existingUser = await IDB.get('users', email);
+    if (existingUser) throw new Error('User already exists');
+    await IDB.set('users', email, { email, password });
+    localStorage.setItem('currentUser', email);
+    document.getElementById('login-modal').classList.add('hidden');
+    document.getElementById('hub-main').classList.remove('hidden');
+    if (document.getElementById('enable-metaverse').checked) {
+      document.getElementById('metaverse-canvas').classList.remove('hidden');
+      loadMetaverse();
+    }
+    showToast('Account created successfully', 'success');
+    narrate('Your account has been created. Welcome to the galaxy!');
+    await IDB.set('logs', Date.now().toString(), { message: `User ${email} signed up`, timestamp: Date.now() });
+    await Bot.updateBotList();
+    await Bot.updateAnalytics();
+    await loadLogs();
+  } catch (error) {
+    showToast(`Signup failed: ${error.message}`, 'error');
+    document.getElementById('auth-error').textContent = error.message;
+    document.getElementById('auth-error').classList.remove('hidden');
+    IDB.set('logs', Date.now().toString(), { message: `Signup failed: ${error.message}`, timestamp: Date.now() });
+  }
+}
+
+async function logout() {
+  localStorage.removeItem('currentUser');
+  document.getElementById('hub-main').classList.add('hidden');
+  document.getElementById('metaverse-canvas').classList.add('hidden');
+  document.getElementById('login-modal').classList.remove('hidden');
+  showToast('Logged out', 'info');
+  narrate('You have logged out. The galaxy awaits your return.');
+  await IDB.set('logs', Date.now().toString(), { message: 'User logged out', timestamp: Date.now() });
+}
+
+// Check auth state
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    const currentUser = localStorage.getItem('currentUser');
+    if (currentUser) {
+      const user = await IDB.get('users', currentUser);
+      if (user) {
+        document.getElementById('login-modal').classList.add('hidden');
+        document.getElementById('hub-main').classList.remove('hidden');
+        if (document.getElementById('enable-metaverse').checked) {
+          document.getElementById('metaverse-canvas').classList.remove('hidden');
+          loadMetaverse();
+        }
+        await Bot.updateBotList();
+        await Bot.updateAnalytics();
+        await loadLogs();
+      }
+    }
+    // Initialize settings
+    await IDB.set('settings', 'metaverse', { key: 'metaverse', enabled: false });
+    await IDB.set('settings', 'narration', { key: 'narration', enabled: true });
+    await IDB.set('settings', 'learning', { key: 'learning', enabled: false });
+  } catch (error) {
+    console.error('DOM load error:', error);
+    showError(`Initialization failed: ${error.message}`);
+  }
+});
+
+// Login event listeners
+document.getElementById('sign-in-btn').addEventListener('click', async () => {
+  const email = document.getElementById('email').value;
+  const password = document.getElementById('password').value;
+  await signIn(email, password);
+});
+
+document.getElementById('sign-up-btn').addEventListener('click', async () => {
+  const email = document.getElementById('email').value;
+  const password = document.getElementById('password').value;
+  await signUp(email, password);
+});
+
+document.getElementById('logout-btn').addEventListener('click', logout);
+
+// Settings event listeners
+document.getElementById('enable-metaverse').addEventListener('change', async e => {
+  await IDB.set('settings', 'metaverse', { key: 'metaverse', enabled: e.target.checked });
+  if (e.target.checked && !document.getElementById('metaverse-canvas').classList.contains('hidden')) {
+    loadMetaverse();
+  } else {
+    document.getElementById('metaverse-canvas').classList.add('hidden');
+  }
+});
+
+document.getElementById('enable-narration').addEventListener('change', async e => {
+  await IDB.set('settings', 'narration', { key: 'narration', enabled: e.target.checked });
+});
+
+document.getElementById('learning-mode').addEventListener('change', async e => {
+  await IDB.set('settings', 'learning', { key: 'learning', enabled: e.target.checked });
+});
+
+document.getElementById('clear-cache').addEventListener('click', () => {
+  showConfirmDialog('Clear all cache and data?', async () => {
+    await caches.delete('smart-hub-cache-v8');
+    indexedDB.deleteDatabase('SmartHubDB');
+    localStorage.clear();
+    location.reload();
+  });
+});
 
 class ConversationManager {
   constructor() {
@@ -172,6 +290,7 @@ class ConversationManager {
     this.currentIntent = null;
     this.botConfig = {};
     this.userMood = 'neutral';
+    this.preferences = JSON.parse(localStorage.getItem('userPrefs')) || { preferredType: 'generic', neural: false };
   }
 
   addInput(input, type, response) {
@@ -195,7 +314,7 @@ class ConversationManager {
   }
 
   getContext() {
-    return { history: this.history, intent: this.currentIntent, config: this.botConfig, mood: this.userMood };
+    return { history: this.history, intent: this.currentIntent, config: this.botConfig, mood: this.userMood, preferences: this.preferences };
   }
 
   getLastBotConfig(type) {
@@ -208,7 +327,12 @@ class ConversationManager {
   }
 
   updateMood(input) {
-    this.userMood = input.includes('awesome') || input.includes('bitchh') ? 'excited' : input.includes('help') || input.includes('fix') ? 'concerned' : 'neutral';
+    this.userMood = input.includes('awesome') ? 'excited' : input.includes('help') || input.includes('fix') ? 'concerned' : 'neutral';
+  }
+
+  updatePreferences(config) {
+    this.preferences = { preferredType: config.type || this.preferences.preferredType, neural: config.neural || this.preferences.neural };
+    localStorage.setItem('userPrefs', JSON.stringify(this.preferences));
   }
 }
 
@@ -216,10 +340,9 @@ const convoManager = new ConversationManager();
 
 class UnifiedAI {
   constructor() {
-    this.avatar = new THREE.Mesh(new THREE.SphereGeometry(0.5), new THREE.MeshBasicMaterial({ color: 0x33B5FF }));
     this.scene = new THREE.Scene();
+    this.avatar = new THREE.Mesh(new THREE.SphereGeometry(0.5), new THREE.MeshBasicMaterial({ color: 0x33B5FF }));
     this.scene.add(this.avatar);
-    this.feedbackScores = { positive: 0, negative: 0 };
     this.badges = [];
     this.worker = new Worker('bot-worker.js');
     this.worker.onmessage = e => this.handleWorkerMessage(e.data);
@@ -244,7 +367,6 @@ class UnifiedAI {
         await this.executeAction(response.action);
         convoManager.clearSession();
         document.getElementById('clarify-input').classList.add('hidden');
-        document.getElementById('feedback').classList.remove('hidden');
         this.checkBadges();
       }
       narrate(response.message);
@@ -252,7 +374,7 @@ class UnifiedAI {
     } catch (error) {
       console.error('AI process error:', error);
       showToast(`AI error: ${error.message}`, 'error');
-      logError('AI processing failed', error.message);
+      IDB.set('logs', Date.now().toString(), { message: `AI processing failed: ${error.message}`, timestamp: Date.now() });
     }
   }
 
@@ -265,19 +387,21 @@ class UnifiedAI {
     if (type === 'application/json') {
       const text = await file.text();
       const config = JSON.parse(text);
-      return { name: config.name || file.name.replace('.json', ''), code: config.code || '// Bot code', type: config.type || 'generic', neural: config.neural || false, apiKey: config.apiKey, schedule: config.schedule, chain: config.chain };
+      return { name: config.name || file.name.replace('.json', ''), code: config.code || '// Bot code', type: config.type || 'generic', neural: config.neural || false, schedule: config.schedule, chain: config.chain };
     } else if (type === 'application/x-yaml' || type === 'text/yaml') {
       const text = await file.text();
-      return { name: text.match(/name: (.+)/)?.[1] || file.name.replace('.yaml', ''), code: text.match(/code: (.+)/)?.[1] || '// Bot code', type: text.match(/type: (.+)/)?.[1] || 'generic', neural: text.includes('neural: true'), apiKey: text.match(/apiKey: (.+)/)?.[1], schedule: text.match(/schedule: (.+)/)?.[1], chain: text.match(/chain: (.+)/)?.[1] };
-    } else if (type === 'application/pdf') {
-      const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
-      let text = '';
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        text += (await page.getTextContent()).items.map(item => item.str).join(' ');
-      }
-      return this.extractConfigFromText(text);
+      const lines = text.split('\n');
+      const config = {};
+      lines.forEach(line => {
+        const [key, value] = line.split(':').map(s => s.trim());
+        if (key === 'name') config.name = value;
+        if (key === 'code') config.code = value || '// Bot code';
+        if (key === 'type') config.type = value || 'generic';
+        if (key === 'neural') config.neural = value === 'true';
+        if (key === 'schedule') config.schedule = value;
+        if (key === 'chain') config.chain = value;
+      });
+      return { name: config.name || file.name.replace('.yaml', ''), code: config.code || '// Bot code', type: config.type || 'generic', neural: config.neural || false, schedule: config.schedule, chain: config.chain };
     }
     throw new Error('Unsupported file type');
   }
@@ -292,8 +416,7 @@ class UnifiedAI {
 
   extractConfigFromText(text) {
     text = text.toLowerCase();
-    let type = 'generic';
-    let apiKey = null;
+    let type = convoManager.preferences.preferredType;
     let schedule = null;
     let chain = null;
     if (text.includes('weather')) type = 'weather';
@@ -301,25 +424,22 @@ class UnifiedAI {
     else if (text.includes('scrape') || text.includes('scraper')) type = 'scraper';
     else if (text.includes('custom')) type = 'custom';
     let name = text.match(/build (.+?) bot/i)?.[1] || 'Generic Bot';
-    let neural = text.includes('neural') || text.includes('ai');
-    if (type === 'custom') apiKey = text.match(/api key (.+?)(?:\s|$)/)?.[1] || null;
+    let neural = text.includes('neural') || text.includes('ai') || convoManager.preferences.neural;
     if (text.includes('every')) schedule = text.match(/every (\d+) minutes/i)?.[1] || null;
     if (text.includes('chain') || text.includes('then')) chain = text.match(/chain (.+?)(?:\s|$)/)?.[1] || text.match(/then (.+?)(?:\s|$)/)?.[1] || null;
-    let code = this.generateCode(type, apiKey);
-    if (this.feedbackScores.positive > this.feedbackScores.negative) {
-      code = this.optimizeCode(code);
-    }
-    return { name, type, neural, code, apiKey, schedule, chain };
+    let code = this.generateCode(type);
+    return { name, type, neural, code, schedule, chain };
   }
 
-  optimizeCode(code) {
-    if (code.includes('fetch')) {
-      return `
-try {
-  ${code.replace('fetch', 'fetch').replace('}', '}} catch (error) { console.error("Bot error:", error); return { error: error.message }; }')}
-`;
-    }
-    return code;
+  generateCode(type) {
+    const templates = {
+      weather: '// Weather bot code (configure locally)',
+      twitter: '// Twitter bot code (configure locally)',
+      scraper: '// Scraper bot code (configure target URL)',
+      custom: '// Custom bot code (configure as needed)',
+      generic: '// Generic bot code'
+    };
+    return templates[type] || '// Generic bot code';
   }
 
   async analyzeInput(input, type) {
@@ -336,7 +456,15 @@ try {
     }
 
     if (!botConfig.type || !botConfig.name) intent = 'clarify';
+    if (document.getElementById('learning-mode').checked && type !== 'command') {
+      const logs = await IDB.getAll('logs');
+      const recentErrors = logs.filter(log => log.message.includes('failed') && log.timestamp > Date.now() - 24 * 60 * 60 * 1000);
+      if (recentErrors.length > 0) {
+        botConfig.suggestion = `Noticed recent errors in ${botConfig.type} bots. Want to add error handling?`;
+      }
+    }
     convoManager.setIntent(intent, botConfig);
+    convoManager.updatePreferences(botConfig);
     return { intent, botConfig };
   }
 
@@ -344,30 +472,18 @@ try {
     const config = {};
     if (!context.config.name) config.name = answer || 'Generic Bot';
     if (!context.config.type) config.type = answer.match(/weather/i) ? 'weather' : answer.match(/twitter|tweet/i) ? 'twitter' : answer.match(/scrape/i) ? 'scraper' : answer.match(/custom/i) ? 'custom' : 'generic';
-    if (!context.config.code) config.code = this.generateCode(config.type || context.config.type, context.config.apiKey);
+    if (!context.config.code) config.code = this.generateCode(config.type || context.config.type);
     config.neural = answer.includes('neural');
-    config.apiKey = answer.match(/api key (.+?)(?:\s|$)/)?.[1] || context.config.apiKey;
     config.schedule = answer.match(/every (\d+) minutes/i)?.[1] || context.config.schedule;
     config.chain = answer.match(/chain (.+?)(?:\s|$)/)?.[1] || context.config.chain;
     return config;
   }
 
-  generateCode(type, apiKey) {
-    const templates = {
-      weather: `async function run() { return await (await fetch("https://api.openweathermap.org/data/2.5/weather?q=London&appid=${apiKey || 'YOUR_API_KEY'}")).json(); }`,
-      twitter: `async function run() { return { status: "Tweet posted" }; }`,
-      scraper: `async function run() { return await (await fetch("https://example.com")).text(); }`,
-      custom: `async function run() { return await (await fetch("YOUR_API_URL?key=${apiKey || 'YOUR_API_KEY'}")).json(); }`,
-      generic: '// Generic bot code'
-    };
-    return templates[type] || '// Generic bot code';
-  }
-
   async generateResponse(analysis) {
     const mood = convoManager.getContext().mood;
     if (analysis.intent === 'create_bot' && analysis.botConfig.name && analysis.botConfig.type) {
-      let suggestion = mood === 'excited' ? ' Hell yeah, this bot’s gonna dominate!' : mood === 'concerned' ? ' Let’s make this bot bulletproof.' : '';
-      if (this.feedbackScores.negative > 0) suggestion += ' Tip: Try specifying an API key or chain for advanced bots.';
+      let suggestion = mood === 'excited' ? ' Hell yeah, this bot’s gonna rock!' : mood === 'concerned' ? ' Let’s make this bot solid.' : '';
+      if (analysis.botConfig.suggestion) suggestion += ` ${analysis.botConfig.suggestion}`;
       return { message: `Forging ${analysis.botConfig.name} bot...${suggestion}`, action: { type: 'create_bot', params: analysis.botConfig }, emotion: mood };
     } else if (analysis.intent.startsWith('batch_')) {
       return { message: `Executing ${analysis.intent.replace('batch_', '')} on selected bots...`, action: { type: analysis.intent }, emotion: mood };
@@ -390,7 +506,7 @@ try {
   async executeAction(action) {
     if (action.type === 'create_bot') {
       const bot = await Bot.create(action.params);
-      await addDoc(collection(db, 'logs'), { message: `Bot ${action.params.name} created`, timestamp: Date.now() });
+      await IDB.set('logs', Date.now().toString(), { message: `Bot ${action.params.name} created`, timestamp: Date.now() });
       if (action.params.type !== 'generic') Bot.run(bot.id);
       if (action.params.chain) Bot.chain(bot.id, action.params.chain);
     } else if (action.type === 'batch_start') {
@@ -416,19 +532,18 @@ try {
     }
   }
 
-  updateFeedback(rating) {
-    this.feedbackScores[rating === 'yes' ? 'positive' : 'negative']++;
-  }
-
   handleWorkerMessage({ botId, result, error }) {
     if (error) {
       showToast(`Bot ${botId} failed: ${error}`, 'error');
-      IDB.update('bots', botId, { errors: (bot => bot.errors + 1)(IDB.get('bots', botId)) });
-      addDoc(collection(db, 'logs'), { message: `Bot ${botId} failed: ${error}`, timestamp: Date.now() });
+      IDB.update('bots', botId, { errors: (bot => (bot.errors || 0) + 1)(IDB.get('bots', botId)) });
+      IDB.set('logs', Date.now().toString(), { message: `Bot ${botId} failed: ${error}`, timestamp: Date.now() });
     } else {
-      showToast(`Bot ${botId} ran successfully: ${JSON.stringify(result).slice(0, 50)}`, 'success');
-      IDB.update('bots', botId, { runs: (bot => bot.runs + 1)(IDB.get('bots', botId)), totalRuntime: (bot => bot.totalRuntime + result.runtime)(IDB.get('bots', botId)) });
-      addDoc(collection(db, 'logs'), { message: `Bot ${botId} executed: ${JSON.stringify(result)}`, timestamp: Date.now() });
+      showToast(`Bot ${botId} ran successfully`, 'success');
+      IDB.update('bots', botId, { 
+        runs: (bot => (bot.runs || 0) + 1)(IDB.get('bots', botId)), 
+        totalRuntime: (bot => (bot.totalRuntime || 0) + (result.runtime || 0))(IDB.get('bots', botId)) 
+      });
+      IDB.set('logs', Date.now().toString(), { message: `Bot ${botId} executed`, timestamp: Date.now() });
     }
     Bot.updateAnalytics();
   }
@@ -439,11 +554,26 @@ const ai = new UnifiedAI();
 class Bot {
   static async create(params) {
     const botId = Date.now().toString();
-    const bot = { id: botId, name: params.name, status: 'stopped', code: params.code, type: params.type, neural: params.neural, apiKey: params.apiKey, schedule: params.schedule, chain: params.chain, createdAt: new Date().toISOString(), version: 1, versions: [{ version: 1, code: params.code, timestamp: new Date().toISOString() }], runs: 0, errors: 0, totalRuntime: 0 };
+    const bot = { 
+      id: botId, 
+      name: params.name, 
+      status: 'stopped', 
+      code: params.code, 
+      type: params.type, 
+      neural: params.neural, 
+      schedule: params.schedule, 
+      chain: params.chain, 
+      createdAt: new Date().toISOString(), 
+      version: 1, 
+      versions: [{ version: 1, code: params.code, timestamp: new Date().toISOString() }], 
+      runs: 0, 
+      errors: 0, 
+      totalRuntime: 0 
+    };
     await IDB.set('bots', botId, bot);
     await this.updateBotList();
     addWidget('status', { x: Math.random() * 5, y: 1, z: Math.random() * 5 }, botId);
-    narrate(`Bot ${bot.name} forged in the galactic foundry.`);
+    narrate(`Bot ${bot.name} forged.`);
     showToast(`Bot ${bot.name} created`, 'success');
     if (bot.schedule) this.scheduleBot(botId, parseInt(bot.schedule));
     return bot;
@@ -454,7 +584,7 @@ class Bot {
     await this.updateBotList();
     showToast(`Bot ${botId} started`, 'success');
     narrate(`Bot ${botId} is now active.`);
-    await addDoc(collection(db, 'logs'), { message: `Bot ${botId} started`, timestamp: Date.now() });
+    await IDB.set('logs', Date.now().toString(), { message: `Bot ${botId} started`, timestamp: Date.now() });
     this.run(botId);
   }
 
@@ -463,7 +593,7 @@ class Bot {
     await this.updateBotList();
     showToast(`Bot ${botId} stopped`, 'success');
     narrate(`Bot ${botId} halted.`);
-    await addDoc(collection(db, 'logs'), { message: `Bot ${botId} stopped`, timestamp: Date.now() });
+    await IDB.set('logs', Date.now().toString(), { message: `Bot ${botId} stopped`, timestamp: Date.now() });
   }
 
   static async delete(botId) {
@@ -471,7 +601,7 @@ class Bot {
     await this.updateBotList();
     showToast('Bot deleted', 'success');
     narrate(`Bot ${botId} decommissioned.`);
-    await addDoc(collection(db, 'logs'), { message: `Bot ${botId} deleted`, timestamp: Date.now() });
+    await IDB.set('logs', Date.now().toString(), { message: `Bot ${botId} deleted`, timestamp: Date.now() });
   }
 
   static async edit(botId, newCode) {
@@ -485,7 +615,7 @@ class Bot {
         await this.updateBotList();
         showToast('Bot code updated', 'success');
         narrate(`Bot ${bot.name} code updated to version ${newVersion}.`);
-        await addDoc(collection(db, 'logs'), { message: `Bot ${botId} code updated`, timestamp: Date.now() });
+        await IDB.set('logs', Date.now().toString(), { message: `Bot ${botId} code updated`, timestamp: Date.now() });
       });
     } else {
       const newVersion = bot.version + 1;
@@ -494,7 +624,7 @@ class Bot {
       await this.updateBotList();
       showToast('Bot code updated', 'success');
       narrate(`Bot ${bot.name} code updated to version ${newVersion}.`);
-      await addDoc(collection(db, 'logs'), { message: `Bot ${botId} code updated`, timestamp: Date.now() });
+      await IDB.set('logs', Date.now().toString(), { message: `Bot ${botId} code updated`, timestamp: Date.now() });
     }
   }
 
@@ -529,23 +659,29 @@ class Bot {
 
   static async share(botIds, email) {
     const bots = await Promise.all(botIds.map(id => IDB.get('bots', id)));
-    await addDoc(collection(db, 'shared_bots'), { bots, recipient: email, sender: auth.currentUser.email, timestamp: Date.now() });
+    const mailto = `mailto:${email}?subject=Shared Bots&body=${encodeURIComponent(JSON.stringify(bots, null, 2))}`;
+    window.location.href = mailto;
     showToast(`Bots shared with ${email}`, 'success');
     narrate(`Bots sent to ${email}.`);
   }
 
   static async updateBotList() {
     const bots = await IDB.getAll('bots');
-    document.getElementById('bot-list').innerHTML = bots.map(bot => `
-      <div class="bot-item" data-id="${bot.id}">
-        <input type="checkbox" class="bot-select">
-        ${bot.name} (${bot.type}${bot.neural ? ', Neural' : ''}) - ${bot.status} (v${bot.version})${bot.schedule ? ' [Every ${bot.schedule} min]' : ''}${bot.chain ? ' [Chain: ${bot.chain}]' : ''}
-        <button onclick="Bot.start('${bot.id}')">Start</button>
-        <button onclick="Bot.stop('${bot.id}')">Stop</button>
-        <button onclick="Bot.editView('${bot.id}')">Edit</button>
-        <button onclick="Bot.delete('${bot.id}')">Delete</button>
-      </div>
-    `).join('');
+    document.getElementById('bot-list').innerHTML = bots.map(bot => {
+      const health = bot.errors > bot.runs * 0.1 ? 'error' : 'healthy';
+      return `
+        <div class="bot-item" data-id="${bot.id}">
+          <input type="checkbox" class="bot-select">
+          ${bot.name} (${bot.type}${bot.neural ? ', Neural' : ''}) - ${bot.status} (v${bot.version})
+          <span class="bot-health ${health}">${health === 'error' ? 'Unstable' : 'Stable'}</span>
+          ${bot.schedule ? '[Every ${bot.schedule} min]' : ''}${bot.chain ? '[Chain: ${bot.chain}]' : ''}
+          <button onclick="Bot.start('${bot.id}')">Start</button>
+          <button onclick="Bot.stop('${bot.id}')">Stop</button>
+          <button onclick="Bot.editView('${bot.id}')">Edit</button>
+          <button onclick="Bot.delete('${bot.id}')">Delete</button>
+        </div>
+      `;
+    }).join('');
     document.getElementById('batch-actions').classList.toggle('hidden', bots.length === 0);
     document.querySelectorAll('.bot-select').forEach(cb => {
       cb.addEventListener('change', () => {
@@ -557,117 +693,67 @@ class Bot {
 
   static async updateAnalytics() {
     const bots = await IDB.getAll('bots');
-    const ctx = document.getElementById('analytics-chart').getContext('2d');
-    if (window.analyticsChart) window.analyticsChart.destroy();
-    window.analyticsChart = new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels: bots.map(b => b.name),
-        datasets: [
-          { label: 'Runs', data: bots.map(b => b.runs), backgroundColor: '#33B5FF' },
-          { label: 'Errors', data: bots.map(b => b.errors), backgroundColor: '#FF3333' },
-          { label: 'Avg Runtime (ms)', data: bots.map(b => b.runs ? b.totalRuntime / b.runs : 0), backgroundColor: '#33FF33' }
-        ]
-      },
-      options: { scales: { y: { beginAtZero: true } } }
+    const canvas = document.getElementById('analytics-chart');
+    const ctx = canvas.getContext('2d');
+    canvas.width = canvas.offsetWidth;
+    canvas.height = 300;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const barWidth = canvas.width / bots.length / 3 - 10;
+    const maxRuns = Math.max(...bots.map(b => b.runs || 0), 1);
+    const maxErrors = Math.max(...bots.map(b => b.errors || 0), 1);
+    const maxRuntime = Math.max(...bots.map(b => b.runs ? (b.totalRuntime || 0) / b.runs : 0), 1);
+
+    bots.forEach((bot, i) => {
+      const x = i * (barWidth * 3 + 30);
+      ctx.fillStyle = '#33B5FF';
+      ctx.fillRect(x, canvas.height - (bot.runs / maxRuns) * canvas.height * 0.8, barWidth, (bot.runs / maxRuns) * canvas.height * 0.8);
+      ctx.fillStyle = '#FF3333';
+      ctx.fillRect(x + barWidth + 5, canvas.height - (bot.errors / maxErrors) * canvas.height * 0.8, barWidth, (bot.errors / maxErrors) * canvas.height * 0.8);
+      ctx.fillStyle = '#33FF33';
+      const avgRuntime = bot.runs ? (bot.totalRuntime || 0) / bot.runs : 0;
+      ctx.fillRect(x + (barWidth + 5) * 2, canvas.height - (avgRuntime / maxRuntime) * canvas.height * 0.8, barWidth, (avgRuntime / maxRuntime) * canvas.height * 0.8);
+      ctx.fillStyle = '#FFF';
+      ctx.font = '12px Orbitron';
+      ctx.fillText(bot.name, x, canvas.height - 10);
     });
   }
 
   static editView(botId) {
     IDB.get('bots', botId).then(bot => {
       document.getElementById('edit-bot-name').textContent = `Editing ${bot.name}`;
+      document.getElementById('code-editor').value = bot.code;
       document.getElementById('bots-tab').classList.add('hidden');
       document.getElementById('edit-bot-tab').classList.remove('hidden');
-      const script = document.createElement('script');
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.33.0/min/vs/loader.min.js';
-      script.onload = () => {
-        require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.33.0/min/vs' } });
-        require(['vs/editor/editor.main'], () => {
-          const editor = monaco.editor.create(document.getElementById('code-editor'), {
-            value: bot.code,
-            language: 'javascript',
-            theme: 'vs-dark'
-          });
-          document.getElementById('save-edit-btn').onclick = () => {
-            Bot.edit(botId, editor.getValue());
-            editor.dispose();
-            document.getElementById('edit-bot-tab').classList.add('hidden');
-            document.getElementById('bots-tab').classList.remove('hidden');
-          };
-        });
+      document.getElementById('save-edit-btn').onclick = () => {
+        Bot.edit(botId, document.getElementById('code-editor').value);
+        document.getElementById('edit-bot-tab').classList.add('hidden');
+        document.getElementById('bots-tab').classList.remove('hidden');
       };
-      document.body.appendChild(script);
     });
   }
 }
 
 async function loadLogs(search = '') {
-  let q = query(collection(db, 'logs'), orderBy('timestamp', 'desc'), limit(10));
-  if (search) {
-    q = query(collection(db, 'logs'), where('message', '>=', search), where('message', '<=', search + '\uf8ff'), orderBy('timestamp', 'desc'), limit(10));
-  }
-  const logs = await getDocs(q);
-  document.getElementById('log-list').innerHTML = logs.docs.map(doc => `<div class="bot-item">${doc.data().message}</div>`).join('');
+  let logs = await IDB.getAll('logs');
+  if (search) logs = logs.filter(log => log.message.toLowerCase().includes(search.toLowerCase()));
+  logs.sort((a, b) => b.timestamp - a.timestamp);
+  document.getElementById('log-list').innerHTML = logs.slice(0, 10).map(log => `<div class="bot-item">${log.message}</div>`).join('');
 }
 
-// Authentication
-document.getElementById('sign-in-btn').addEventListener('click', async () => {
-  try {
-    const email = document.getElementById('email').value;
-    const password = document.getElementById('password').value;
-    await signInWithEmailAndPassword(auth, email, password);
-    showToast('Signed in successfully', 'success');
-    narrate('You are now logged into the Smart Hub.');
-  } catch (error) {
-    showToast(`Login failed: ${error.message}`, 'error');
-    document.getElementById('auth-error').textContent = error.message;
-    document.getElementById('auth-error').classList.remove('hidden');
-    logError('Login failed', error.message);
-  }
-});
-
-document.getElementById('sign-up-btn').addEventListener('click', async () => {
-  try {
-    const email = document.getElementById('email').value;
-    const password = document.getElementById('password').value;
-    await createUserWithEmailAndPassword(auth, email, password);
-    showToast('Account created successfully', 'success');
-    narrate('Your account has been created. Welcome to the galaxy!');
-  } catch (error) {
-    showToast(`Signup failed: ${error.message}`, 'error');
-    document.getElementById('auth-error').textContent = error.message;
-    document.getElementById('auth-error').classList.remove('hidden');
-    logError('Signup failed', error.message);
-  }
-});
-
-document.getElementById('logout-btn').addEventListener('click', async () => {
-  await signOut(auth);
-  showToast('Logged out', 'info');
-  narrate('You have logged out. The galaxy awaits your return.');
-});
-
-onAuthStateChanged(auth, async user => {
-  try {
-    if (user) {
-      document.getElementById('login-modal').classList.add('hidden');
-      document.getElementById('hub-main').classList.remove('hidden');
-      document.getElementById('metaverse-canvas').classList.remove('hidden');
-      await loadLogs();
-      await Bot.updateBotList();
-      await Bot.updateAnalytics();
-      if (Notification.permission !== 'granted') Notification.requestPermission();
-      setupPushNotifications();
-    } else {
-      document.getElementById('hub-main').classList.add('hidden');
-      document.getElementById('metaverse-canvas').classList.add('hidden');
-      document.getElementById('login-modal').classList.remove('hidden');
-    }
-    document.getElementById('loading').classList.add('hidden');
-  } catch (error) {
-    showError(`Auth error: ${error.message}`);
-    logError('Auth state change failed', error.message);
-  }
+// Download logs
+document.getElementById('download-logs')?.addEventListener('click', async () => {
+  const logs = await IDB.getAll('logs');
+  const blob = new Blob([JSON.stringify(logs, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'smart-hub-logs.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Logs downloaded', 'success');
 });
 
 // Event Listeners
@@ -704,41 +790,7 @@ document.getElementById('file-input').addEventListener('change', async e => {
   for (const file of e.target.files) await ai.processInput(file, 'file');
 });
 
-document.getElementById('feedback-yes').addEventListener('click', async () => {
-  await addDoc(collection(db, 'feedback'), { rating: 'yes', timestamp: Date.now() });
-  ai.updateFeedback('yes');
-  showToast('Thanks for your feedback!', 'success');
-  document.getElementById('feedback').classList.add('hidden');
-});
-
-document.getElementById('feedback-no').addEventListener('click', async () => {
-  await addDoc(collection(db, 'feedback'), { rating: 'no', timestamp: Date.now() });
-  ai.updateFeedback('no');
-  showToast('Thanks for your feedback!', 'success');
-  document.getElementById('feedback').classList.add('hidden');
-});
-
 document.getElementById('log-search').addEventListener('input', e => loadLogs(e.target.value));
-
-document.getElementById('bots-back-btn').addEventListener('click', () => {
-  document.getElementById('bots-tab').classList.add('hidden');
-  document.getElementById('hub-main').classList.remove('hidden');
-});
-
-document.getElementById('logs-back-btn').addEventListener('click', () => {
-  document.getElementById('logs-tab').classList.add('hidden');
-  document.getElementById('hub-main').classList.remove('hidden');
-});
-
-document.getElementById('analytics-back-btn').addEventListener('click', () => {
-  document.getElementById('analytics-tab').classList.add('hidden');
-  document.getElementById('hub-main').classList.remove('hidden');
-});
-
-document.getElementById('edit-back-btn').addEventListener('click', () => {
-  document.getElementById('edit-bot-tab').classList.add('hidden');
-  document.getElementById('bots-tab').classList.remove('hidden');
-});
 
 document.getElementById('template-btn').addEventListener('click', () => {
   document.getElementById('template-panel').classList.toggle('hidden');
@@ -748,9 +800,9 @@ document.querySelectorAll('.template-option').forEach(btn => {
   btn.addEventListener('click', () => {
     const type = btn.dataset.type;
     const config = {
-      weather: { name: 'Weather Bot', type: 'weather', code: ai.generateCode('weather'), neural: false },
-      twitter: { name: 'Twitter Bot', type: 'twitter', code: ai.generateCode('twitter'), neural: false },
-      scraper: { name: 'Scraper Bot', type: 'scraper', code: ai.generateCode('scraper'), neural: false },
+      weather: { name: 'Weather Bot', type: 'weather', code: ai.generateCode('weather'), neural: convoManager.preferences.neural },
+      twitter: { name: 'Twitter Bot', type: 'twitter', code: ai.generateCode('twitter'), neural: convoManager.preferences.neural },
+      scraper: { name: 'Scraper Bot', type: 'scraper', code: ai.generateCode('scraper'), neural: convoManager.preferences.neural },
       custom: { name: 'Custom Bot', type: 'custom', code: ai.generateCode('custom'), neural: true }
     }[type];
     ai.processInput(config, 'text');
@@ -793,12 +845,13 @@ document.getElementById('theme-toggle').addEventListener('click', () => {
 });
 
 document.addEventListener('click', e => {
-  const panels = ['template-panel', 'share-panel', 'clarify-input', 'text-input'];
+  const panels = ['template-panel', 'share-panel', 'clarify-input', 'text-input', 'debug-panel'];
   if (!e.target.closest('.panel, .modal, .btn, .avatar-panel')) {
     panels.forEach(id => document.getElementById(id).classList.add('hidden'));
   }
 });
 
+// Improved swipe detection
 let touchstartX = 0, touchstartY = 0, touchendX = 0, touchendY = 0;
 document.addEventListener('touchstart', e => {
   touchstartX = e.changedTouches[0].screenX;
@@ -807,45 +860,58 @@ document.addEventListener('touchstart', e => {
 document.addEventListener('touchend', e => {
   touchendX = e.changedTouches[0].screenX;
   touchendY = e.changedTouches[0].screenY;
-  if (touchendX < touchstartX - 50) {
-    const tabs = ['bots', 'logs', 'analytics'];
+  if (Math.abs(touchendY - touchstartY) > 50) return; // Ignore vertical swipes
+  if (touchendX < touchstartX - 100) {
+    const tabs = ['bots', 'logs', 'analytics', 'settings'];
     const active = document.querySelector('.tab-btn.active').dataset.tab;
     const next = tabs[(tabs.indexOf(active) + 1) % tabs.length];
     document.querySelector(`[data-tab="${next}"]`).click();
-  } else if (touchendX > touchstartX + 50) {
-    const tabs = ['bots', 'logs', 'analytics'];
+    showToast(`Swiped to ${next}`, 'info');
+  } else if (touchendX > touchstartX + 100) {
+    const tabs = ['bots', 'logs', 'analytics', 'settings'];
     const active = document.querySelector('.tab-btn.active').dataset.tab;
     const prev = tabs[(tabs.indexOf(active) - 1 + tabs.length) % tabs.length];
     document.querySelector(`[data-tab="${prev}"]`).click();
+    showToast(`Swiped to ${prev}`, 'info');
   }
 });
 
-// Metaverse Setup
+// Lazy-load Metaverse
 let scene, camera, renderer, controls, raycaster, mouse;
-try {
-  scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-  renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('metaverse-canvas'), alpha: true });
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  scene.background = new THREE.Color(0x0D1B2A);
-  controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.05;
+async function loadMetaverse() {
+  try {
+    // Load Three.js dynamically
+    await Promise.all([
+      import('https://cdn.jsdelivr.net/npm/three@0.141.0/build/three.min.js'),
+      import('https://cdn.jsdelivr.net/npm/three@0.141.0/examples/js/controls/OrbitControls.js')
+    ]);
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('metaverse-canvas'), alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    scene.background = new THREE.Color(0x0D1B2A);
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
 
-  const room = new THREE.Mesh(new THREE.PlaneGeometry(8, 8), new THREE.MeshBasicMaterial({ color: 0x33B5FF, opacity: 0.3, transparent: true, side: THREE.DoubleSide }));
-  room.rotation.x = Math.PI / 2;
-  scene.add(room);
+    const room = new THREE.Mesh(new THREE.PlaneGeometry(8, 8), new THREE.MeshBasicMaterial({ color: 0x33B5FF, opacity: 0.3, transparent: true, side: THREE.DoubleSide }));
+    room.rotation.x = Math.PI / 2;
+    scene.add(room);
 
-  raycaster = new THREE.Raycaster();
-  mouse = new THREE.Vector2();
-  camera.position.set(0, 3, 5);
-  camera.lookAt(0, 0, 0);
-} catch (error) {
-  console.error('Metaverse setup error:', error);
-  logError('Metaverse setup failed', error.message);
+    raycaster = new THREE.Raycaster();
+    mouse = new THREE.Vector2();
+    camera.position.set(0, 3, 5);
+    camera.lookAt(0, 0, 0);
+    animate();
+  } catch (error) {
+    console.error('Metaverse setup error:', error);
+    showToast('Failed to load metaverse', 'error');
+    IDB.set('logs', Date.now().toString(), { message: `Metaverse setup failed: ${error.message}`, timestamp: Date.now() });
+  }
 }
 
 function addWidget(type, position, botId) {
+  if (!scene) return;
   const widget = new THREE.Mesh(new THREE.SphereGeometry(0.3), new THREE.MeshBasicMaterial({ color: type === 'status' ? 0xFF3333 : 0x33B5FF }));
   widget.position.set(position.x, position.y, position.z);
   widget.userData = { botId };
@@ -853,6 +919,7 @@ function addWidget(type, position, botId) {
 }
 
 function animate() {
+  if (!renderer?.getContext()) return;
   requestAnimationFrame(animate);
   scene.children.forEach(child => {
     if (child.geometry.type === 'SphereGeometry') child.position.y = Math.sin(Date.now() * 0.002 + child.position.x) * 0.3 + 1;
@@ -860,9 +927,9 @@ function animate() {
   controls.update();
   renderer.render(scene, camera);
 }
-if (renderer?.getContext()) animate();
 
 document.getElementById('metaverse-canvas').addEventListener('click', e => {
+  if (!raycaster) return;
   mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
   mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
   raycaster.setFromCamera(mouse, camera);
@@ -886,5 +953,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     narrate(`Navigating to ${btn.dataset.tab} sector.`);
+    if (btn.dataset.tab === 'logs') loadLogs();
+    if (btn.dataset.tab === 'analytics') Bot.updateAnalytics();
   });
 });
