@@ -3,79 +3,150 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#33B5FF">
   <title>Smart Hub Ultra</title>
   <link rel="stylesheet" href="styles.css">
-  <link rel="manifest" href="manifest.json">
 </head>
 <body>
-  <div id="welcome-overlay" class="overlay hidden">
-    <div class="welcome-content glassmorphic">
-      <h2>Welcome to Smart Hub Ultra</h2>
-      <p>The ultimate AI bot creation platform.</p>
-      <p><b>Start:</b> Tap 'Bots' to create, or try 'Voice Command' for hands-free control.</p>
-      <p><b>Tip:</b> Check 'Analytics' for bot performance stats.</p>
-      <button id="dismiss-welcome" class="btn blue-glow">Got It</button>
+  <!-- Loading Screen -->
+  <div id="loading-screen" class="loading-screen">
+    <div class="loading-logo">
+      <svg width="100" height="100" viewBox="0 0 100 100">
+        <circle cx="50" cy="50" r="40" stroke="url(#gradient)" stroke-width="10" fill="none" class="rotate"/>
+        <defs>
+          <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#FF6F61;stop-opacity:1"/>
+            <stop offset="50%" style="stop-color:#33B5FF;stop-opacity:1"/>
+            <stop offset="100%" style="stop-color:#D4A5FF;stop-opacity:1"/>
+          </linearGradient>
+        </defs>
+      </svg>
+      <h1>Smart Hub Ultra</h1>
+    </div>
+    <div class="progress-bar">
+      <div id="progress" class="progress-fill"></div>
+    </div>
+    <p>Loading assets...</p>
+  </div>
+
+  <!-- Sidebar -->
+  <div id="sidebar" class="sidebar hidden">
+    <h2>Smart Hub Ultra</h2>
+    <a href="#" data-modal="dashboard-modal">Dashboard</a>
+    <a href="#" data-modal="bots-modal">Bots</a>
+    <a href="#" data-modal="inspiration-modal">Inspiration Lab</a>
+    <a href="#" data-modal="builder-modal">Bot Builder</a>
+    <a href="#" data-modal="workshop-modal">AI Workshop</a>
+    <a href="#" data-modal="editor-modal">Editor</a>
+    <a href="#" data-modal="playground-modal">Playground</a>
+    <a href="#" data-modal="creators-modal">Creator’s Hub</a>
+    <a href="#" data-modal="collab-modal">Collab Hub</a>
+    <a href="#" data-modal="voice-modal">Voice Command</a>
+    <a href="#" data-modal="analytics-modal">Analytics</a>
+    <a href="#" data-modal="account-modal">Account</a>
+    <a href="#" data-modal="manual-modal">Manual</a>
+    <a href="#" id="boss-link" class="hidden" data-modal="boss-modal">Boss View</a>
+    <a href="#" id="logout-btn">Logout</a>
+  </div>
+
+  <!-- Notification Bell -->
+  <div id="notification-bell" class="notification-bell hidden">
+    <span id="notification-icon">🔔</span>
+    <span id="notification-count" class="hidden">0</span>
+    <div id="notification-dropdown" class="hidden">
+      <h3>Updates</h3>
+      <div id="notification-list"></div>
     </div>
   </div>
-  <div id="loading" class="modal">
-    <div class="modal-content glassmorphic">
-      <h2>Loading Smart Hub...</h2>
-      <div class="progress-bar">
-        <div id="progress" class="progress"></div>
-      </div>
-      <p id="loading-message">Loading assets...</p>
-      <p id="loading-error" class="error hidden"></p>
-      <button id="retry-btn" class="btn blue-glow hidden">Retry</button>
-    </div>
-  </div>
+
+  <!-- Modals -->
+  <!-- Login Modal -->
   <div id="login-modal" class="modal">
-    <div class="modal-content glassmorphic">
+    <div class="modal-content glassmorphic login-gradient">
       <h2>Smart Hub Access</h2>
       <input type="text" id="username" placeholder="Username (optional)">
       <input type="email" id="email" placeholder="Email (optional)">
-      <input type="password" id="password" placeholder="Password" required>
+      <input type="password" id="password" placeholder="Password (min 8 chars)" required>
+      <input type="text" id="six-digit" placeholder="6-Digit Code" maxlength="6" required>
+      <input type="text" id="four-digit" placeholder="4-Digit Code" maxlength="4" required>
       <button id="sign-in-btn" class="btn red-glow">Sign In</button>
       <button id="sign-up-btn" class="btn blue-glow">Sign Up</button>
+      <button id="forgot-password" class="btn purple-glow">Forgot Password?</button>
       <p id="auth-error" class="error hidden"></p>
       <div id="login-spinner" class="hidden">Processing...</div>
     </div>
   </div>
-  <div id="hub-main" class="hidden">
-    <div class="notification-bell">
-      <span id="notification-icon">🔔</span>
-      <span id="notification-count" class="hidden">0</span>
-      <div id="notification-dropdown" class="hidden">
-        <h3>Updates</h3>
-        <div id="notification-list"></div>
-      </div>
+
+  <!-- Recovery Modal -->
+  <div id="recovery-modal" class="modal hidden">
+    <div class="modal-content glassmorphic recovery-gradient">
+      <h2>Password Recovery</h2>
+      <input type="text" id="recovery-six-digit" placeholder="6-Digit Code">
+      <input type="text" id="recovery-four-digit" placeholder="4-Digit Code">
+      <button id="recover-btn" class="btn blue-glow">Recover</button>
+      <button id="contact-support" class="btn purple-glow">Contact Support</button>
+      <p id="recovery-error" class="error hidden"></p>
     </div>
-    <nav class="tab-nav">
-      <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
-      <button class="tab-btn" data-tab="bots">Bots</button>
-      <button class="tab-btn" data-tab="inspiration">Inspiration Lab</button>
-      <button class="tab-btn" data-tab="builder">Bot Builder</button>
-      <button class="tab-btn" data-tab="workshop">AI Workshop</button>
-      <button class="tab-btn" data-tab="editor">Editor</button>
-      <button class="tab-btn" data-tab="playground">Playground</button>
-      <button class="tab-btn" data-tab="creators">Creator’s Hub</button>
-      <button class="tab-btn" data-tab="collab">Collab Hub</button>
-      <button class="tab-btn" data-tab="voice">Voice Command</button>
-      <button class="tab-btn" data-tab="analytics">Analytics</button>
-      <button class="tab-btn" data-tab="boss" style="display: none;">Boss</button>
-      <button class="tab-btn" data-tab="settings">Settings</button>
-    </nav>
-    <div id="dashboard-tab" class="tab-content active">
-      <h2>Dashboard</h2>
+  </div>
+
+  <!-- Support Modal -->
+  <div id="support-modal" class="modal hidden">
+    <div class="modal-content glassmorphic support-gradient">
+      <h2>Contact Support</h2>
+      <input type="text" id="support-username" placeholder="Username">
+      <input type="text" id="support-name" placeholder="Name">
+      <input type="email" id="support-email" placeholder="Email">
+      <input type="text" id="support-number" placeholder="Phone Number">
+      <textarea id="support-message" placeholder="Describe your issue..."></textarea>
+      <button id="submit-support" class="btn blue-glow">Submit</button>
+    </div>
+  </div>
+
+  <!-- Welcome Modal -->
+  <div id="welcome-modal" class="modal hidden">
+    <div class="modal-content glassmorphic welcome-gradient">
+      <h2>Welcome to Smart Hub Ultra!</h2>
+      <p>The ultimate AI bot creation platform.</p>
+      <h3>Recent Updates</h3>
+      <div id="welcome-updates"></div>
+      <button id="dismiss-welcome" class="btn blue-glow">Got It</button>
+    </div>
+  </div>
+
+  <!-- Dashboard Modal -->
+  <div id="dashboard-modal" class="modal hidden">
+    <div class="modal-content glassmorphic dashboard-gradient">
+      <h1>Dashboard</h1>
+      <div id="dashboard-tour" class="tour hidden">
+        <p>Step 1: Welcome to the Dashboard! Click the widgets to explore.</p>
+        <button id="next-tour-step" class="btn blue-glow">Next</button>
+      </div>
       <div id="dashboard-widgets">
-        <div class="dashboard-widget" data-action="view-bots">Bots: <span id="bot-status">0 active</span></div>
-        <div class="dashboard-widget" data-action="view-weather">Weather: <span id="weather">Loading...</span></div>
-        <div class="dashboard-widget" data-action="view-insights">AI Insights: <span id="ai-insights">Analyzing...</span></div>
+        <div class="dashboard-widget glassmorphic" data-action="view-bots">
+          <p>Bots: <span id="bot-status">0 active</span></p>
+          <span class="tooltip" data-tooltip="View your bots">?</span>
+        </div>
+        <div class="dashboard-widget glassmorphic" data-action="view-weather">
+          <p>Weather: <span id="weather">Loading...</span></p>
+          <span class="tooltip" data-tooltip="Check the weather in London">?</span>
+        </div>
+        <div class="dashboard-widget glassmorphic" data-action="view-insights">
+          <p>AI Insights: <span id="ai-insights">Analyzing...</span></p>
+          <span class="tooltip" data-tooltip="Get AI suggestions">?</span>
+        </div>
+        <div class="dashboard-widget glassmorphic" data-action="create-bot">
+          <p>Create a New Bot</p>
+          <span class="tooltip" data-tooltip="Start building a bot">?</span>
+        </div>
       </div>
+      <button class="close-modal btn purple-glow">Close</button>
     </div>
-    <div id="bots-tab" class="tab-content hidden">
-      <h2>Bots</h2>
-      <label><input type="checkbox" id="use-wizard"> Use Creation Wizard</label>
+  </div>
+
+  <!-- Bots Modal -->
+  <div id="bots-modal" class="modal hidden">
+    <div class="modal-content glassmorphic bots-gradient">
+      <h1>Bots</h1>
+      <label><input type="checkbox" id="use-wizard"> Use Creation Wizard <span class="tooltip" data-tooltip="Guided bot creation">?</span></label>
       <div id="creation-wizard" class="hidden">
         <h3>Bot Creation Wizard</h3>
         <textarea id="bot-description" placeholder="Describe your bot..."></textarea>
@@ -83,56 +154,97 @@
         <button id="submit-wizard" class="btn blue-glow">Create Bot</button>
       </div>
       <div id="file-upload" class="drop-zone">
-        <p>Drop JSON/YAML blueprints or tap to upload</p>
+        <p>Drop JSON/YAML blueprints or tap to upload <span class="tooltip" data-tooltip="Upload bot blueprints">?</span></p>
         <input type="file" id="file-input" multiple accept=".json,.yaml">
       </div>
-      <button id="voice-input-btn" class="btn red-glow">Voice Idea</button>
+      <button id="voice-input-btn" class="btn red-glow">Voice Idea <span class="tooltip" data-tooltip="Create a bot using voice">?</span></button>
       <div id="text-input-section">
         <textarea id="text-input" placeholder="Enter your bot idea..."></textarea>
         <button id="text-input-btn" class="btn red-glow">Submit Text Idea</button>
       </div>
-      <button id="fusion-btn" class="btn blue-glow">Fuse Bots</button>
+      <button id="fusion-btn" class="btn blue-glow">Fuse Bots <span class="tooltip" data-tooltip="Combine two bots">?</span></button>
       <div id="bot-review" class="hidden"></div>
+      <div id="bot-list"></div>
+      <h3>Marketplace</h3>
+      <div id="marketplace-featured">
+        <h4>Featured Bots</h4>
+        <div id="featured-bots"></div>
+      </div>
+      <div id="marketplace"></div>
+      <button class="close-modal btn purple-glow">Close</button>
     </div>
-    <div id="inspiration-tab" class="tab-content hidden">
-      <h2>Inspiration Lab</h2>
+  </div>
+
+  <!-- Inspiration Lab Modal -->
+  <div id="inspiration-modal" class="modal hidden">
+    <div class="modal-content glassmorphic inspiration-gradient">
+      <h1>Inspiration Lab</h1>
       <input type="text" id="meme-search" placeholder="Search memes...">
       <div id="inspiration-ideas"></div>
       <button id="generate-idea" class="btn blue-glow">Generate New Idea</button>
+      <button class="close-modal btn purple-glow">Close</button>
     </div>
-    <div id="builder-tab" class="tab-content hidden">
-      <h2>Bot Builder</h2>
+  </div>
+
+  <!-- Bot Builder Modal -->
+  <div id="builder-modal" class="modal hidden">
+    <div class="modal-content glassmorphic builder-gradient">
+      <h1>Bot Builder</h1>
       <div id="builder-canvas" class="builder-canvas">
         <div id="builder-components">
-          <div class="component" data-type="action">Action</div>
-          <div class="component" data-type="condition">Condition</div>
-          <div class="component" data-type="api">API Call</div>
-          <div class="component" data-type="meme">Meme Fetch</div>
-          <div class="component" data-type="image">Image Fetch</div>
+          <div class="component glassmorphic" data-type="action">Action</div>
+          <div class="component glassmorphic" data-type="condition">Condition</div>
+          <div class="component glassmorphic" data-type="api">API Call</div>
+          <div class="component glassmorphic" data-type="meme">Meme Fetch</div>
+          <div class="component glassmorphic" data-type="image">Image Fetch</div>
         </div>
         <div id="builder-workspace"></div>
       </div>
       <button id="build-bot" class="btn blue-glow">Build Bot</button>
+      <button class="close-modal btn purple-glow">Close</button>
     </div>
-    <div id="workshop-tab" class="tab-content hidden">
-      <h2>AI Workshop</h2>
+  </div>
+
+  <!-- AI Workshop Modal -->
+  <div id="workshop-modal" class="modal hidden">
+    <div class="modal-content glassmorphic workshop-gradient">
+      <h1>AI Workshop</h1>
       <textarea id="workshop-code" style="width: 100%; height: 300px;"></textarea>
       <button id="debug-code" class="btn blue-glow">Debug with AI</button>
       <div id="workshop-suggestions"></div>
+      <button class="close-modal btn purple-glow">Close</button>
     </div>
-    <div id="editor-tab" class="tab-content hidden">
-      <h2>Editor</h2>
+  </div>
+
+  <!-- Editor Modal -->
+  <div id="editor-modal" class="modal hidden">
+    <div class="modal-content glassmorphic editor-gradient">
+      <h1>Editor</h1>
       <textarea id="code-editor" style="width: 100%; height: 400px;"></textarea>
+      <div id="code-suggestions"></div>
       <button id="run-code" class="btn blue-glow">Run Code</button>
-      <button id="share-btn" class="btn blue-glow">Share Code</button>
+      <button id="share-btn" class="btn green-glow">Share Code</button>
+      <button id="generate-qr" class="btn orange-glow">Generate QR Code</button>
+      <div id="qr-code"></div>
       <div id="code-output"></div>
+      <button class="close-modal btn purple-glow">Close</button>
     </div>
-    <div id="playground-tab" class="tab-content hidden">
-      <h2>Bot Playground</h2>
+  </div>
+
+  <!-- Playground Modal -->
+  <div id="playground-modal" class="modal hidden">
+    <div class="modal-content glassmorphic playground-gradient">
+      <h1>Bot Playground</h1>
       <div id="bot-playground"></div>
+      <div id="sentiment-analysis" class="hidden"></div>
+      <button class="close-modal btn purple-glow">Close</button>
     </div>
-    <div id="creators-tab" class="tab-content hidden">
-      <h2>Creator’s Hub</h2>
+  </div>
+
+  <!-- Creator’s Hub Modal -->
+  <div id="creators-modal" class="modal hidden">
+    <div class="modal-content glassmorphic creators-gradient">
+      <h1>Creator’s Hub</h1>
       <input type="text" id="bot-search" placeholder="Search bots...">
       <div id="bot-list"></div>
       <h3>Tracking Logs</h3>
@@ -140,51 +252,163 @@
       <h3>Leaderboard</h3>
       <div id="leaderboard"></div>
       <h3>Marketplace</h3>
+      <div id="marketplace-featured">
+        <h4>Featured Bots</h4>
+        <div id="featured-bots"></div>
+      </div>
       <div id="marketplace"></div>
+      <button class="close-modal btn purple-glow">Close</button>
     </div>
-    <div id="collab-tab" class="tab-content hidden">
-      <h2>Collab Hub</h2>
+  </div>
+
+  <!-- Collab Hub Modal -->
+  <div id="collab-modal" class="modal hidden">
+    <div class="modal-content glassmorphic collab-gradient">
+      <h1>Collab Hub</h1>
       <input type="text" id="collab-user" placeholder="Invite user by email...">
       <button id="invite-user" class="btn blue-glow">Invite</button>
       <div id="collab-space"></div>
-    </div>
-    <div id="voice-tab" class="tab-content hidden">
-      <h2>Voice Command Center</h2>
-      <button id="start-voice" class="btn red-glow">Start Listening</button>
-      <div id="voice-output"></div>
-    </div>
-    <div id="analytics-tab" class="tab-content hidden">
-      <h2>Analytics Dashboard</h2>
-      <div id="analytics-stats"></div>
-    </div>
-    <div id="boss-tab" class="tab-content hidden">
-      <h2>Boss Overview</h2>
-      <div id="boss-users"></div>
-      <div id="boss-bots"></div>
-    </div>
-    <div id="settings-tab" class="tab-content hidden">
-      <h2>Settings</h2>
-      <label><input type="checkbox" id="enable-narration"> AI Narration</label>
-      <label><input type="checkbox" id="mentor-mode"> AI Mentor</label>
-      <label><input type="checkbox" id="telegram-notifs"> Telegram Notifications</label>
-      <input type="text" id="telegram-token" placeholder="Telegram Bot Token" value="7264906653:AAFg1NQr3k3XTcqRHJJacnZ8_pliOWZa6rY">
-      <input type="text" id="telegram-chat-id" placeholder="Telegram Chat ID">
-      <button id="fetch-chat-id" class="btn blue-glow">Fetch Chat ID</button>
-      <select id="language-select">
-        <option value="en">English</option>
-        <option value="es">Spanish</option>
-        <option value="fr">French</option>
-      </select>
-      <input type="file" id="theme-image" accept="image/*">
-      <button id="theme-toggle" class="btn blue-glow">Toggle Theme</button>
-      <button id="webhook-setup" class="btn blue-glow">Setup Webhook</button>
+      <div id="collab-chat" class="hidden">
+        <h3>Live Chat</h3>
+        <div id="chat-messages"></div>
+        <input type="text" id="chat-input" placeholder="Type a message...">
+        <button id="send-chat" class="btn blue-glow">Send</button>
+      </div>
+      <button class="close-modal btn purple-glow">Close</button>
     </div>
   </div>
+
+  <!-- Voice Command Modal -->
+  <div id="voice-modal" class="modal hidden">
+    <div class="modal-content glassmorphic voice-gradient">
+      <h1>Voice Command Center</h1>
+      <button id="start-voice" class="btn red-glow">Start Listening</button>
+      <div id="voice-output"></div>
+      <button class="close-modal btn purple-glow">Close</button>
+    </div>
+  </div>
+
+  <!-- Analytics Modal -->
+  <div id="analytics-modal" class="modal hidden">
+    <div class="modal-content glassmorphic analytics-gradient">
+      <h1>Analytics Dashboard</h1>
+      <div id="analytics-stats"></div>
+      <button class="close-modal btn purple-glow">Close</button>
+    </div>
+  </div>
+
+  <!-- Account Modal -->
+  <div id="account-modal" class="modal hidden">
+    <div class="modal-content glassmorphic account-gradient">
+      <h1>Account Portal</h1>
+      <div class="account-section glassmorphic">
+        <h2>Profile Picture</h2>
+        <img id="profile-pic" src="default-pic.jpg" alt="Profile Picture">
+        <input type="file" id="profile-pic-upload" accept="image/*">
+      </div>
+      <div class="account-section glassmorphic">
+        <h2>Change Credentials</h2>
+        <input type="password" id="new-password" placeholder="New Password">
+        <input type="text" id="new-six-digit" placeholder="New 6-Digit Code" maxlength="6">
+        <input type="text" id="new-four-digit" placeholder="New 4-Digit Code" maxlength="4">
+        <button id="change-password" class="btn blue-glow">Update</button>
+      </div>
+      <div class="account-section glassmorphic">
+        <h2>Account Overview</h2>
+        <p><b>Username:</b> <span id="account-username"></span></p>
+        <p><b>Email:</b> <span id="account-email"></span></p>
+        <p><b>Bots Created:</b> <span id="account-bots"></span></p>
+        <p><b>Points:</b> <span id="account-points"></span></p>
+        <p><b>Level:</b> <span id="account-level"></span></p>
+        <div id="level-progress" class="progress-bar">
+          <div id="level-progress-fill" class="progress-fill"></div>
+        </div>
+        <p><b>Badges:</b> <span id="account-badges"></span></p>
+      </div>
+      <div class="account-section glassmorphic">
+        <h2>Settings</h2>
+        <label><input type="checkbox" id="enable-narration"> AI Narration</label>
+        <label><input type="checkbox" id="mentor-mode"> AI Mentor</label>
+        <label><input type="checkbox" id="telegram-notifs"> Telegram Notifications</label>
+        <input type="text" id="telegram-token" placeholder="Telegram Bot Token" value="7264906653:AAFg1NQr3k3XTcqRHJJacnZ8_pliOWZa6rY">
+        <input type="text" id="telegram-chat-id" placeholder="Telegram Chat ID">
+        <button id="fetch-chat-id" class="btn blue-glow">Fetch Chat ID</button>
+        <select id="language-select">
+          <option value="en">English</option>
+          <option value="es">Spanish</option>
+          <option value="fr">French</option>
+        </select>
+        <input type="file" id="theme-image" accept="image/*">
+        <input type="color" id="theme-color" value="#1A1A2E">
+        <button id="apply-theme" class="btn blue-glow">Apply Theme</button>
+        <button id="theme-toggle" class="btn purple-glow">Toggle Theme</button>
+        <button id="webhook-setup" class="btn blue-glow">Setup Webhook</button>
+      </div>
+      <button class="close-modal btn purple-glow">Close</button>
+    </div>
+  </div>
+
+  <!-- Manual Modal -->
+  <div id="manual-modal" class="modal hidden">
+    <div class="modal-content glassmorphic manual-gradient">
+      <h1>User Manual</h1>
+      <div class="manual-section glassmorphic">
+        <h2>Getting Started</h2>
+        <p>1. After the loading screen, sign up or log in with your email/username, password (min 8 characters), 6-digit code, and 4-digit code.</p>
+        <p>2. View the welcome notice with recent updates, then access the Dashboard.</p>
+        <p>3. Use the sidebar to open modals for Bots, Inspiration Lab, or other sections.</p>
+        <p>4. Check your Account modal to manage your profile, settings, and earn badges.</p>
+      </div>
+      <div class="manual-section glassmorphic">
+        <h2>Tips for Bot Creation</h2>
+        <p>- Use the Creation Wizard in Bots for guided creation.</p>
+        <p>- Explore the Inspiration Lab for meme and API ideas.</p>
+        <p>- Test your bots in the Playground and analyze sentiment in responses.</p>
+        <p>- Collaborate in the Collab Hub with live chat and real-time editing.</p>
+        <p>- Share bots via QR codes generated in the Editor.</p>
+      </div>
+      <div class="manual-section glassmorphic">
+        <h2>FAQs</h2>
+        <p><b>Q: How do I change the UI language?</b> Go to Account > Settings and select your language.</p>
+        <p><b>Q: What’s the leveling system?</b> Earn XP by creating bots, collaborating, and more. Check your level in Account.</p>
+        <p><b>Q: How do I enable AI narration?</b> Enable it in Account > Settings for accessibility.</p>
+      </div>
+      <button class="close-modal btn purple-glow">Close</button>
+    </div>
+  </div>
+
+  <!-- Boss View Modal -->
+  <div id="boss-modal" class="modal hidden">
+    <div class="modal-content glassmorphic boss-gradient">
+      <h1>Boss View</h1>
+      <div class="boss-section glassmorphic">
+        <h2>Users</h2>
+        <div id="boss-users"></div>
+      </div>
+      <div class="boss-section glassmorphic">
+        <h2>Bots</h2>
+        <div id="boss-bots"></div>
+      </div>
+      <div class="boss-section glassmorphic">
+        <h2>Support Tickets</h2>
+        <div id="boss-tickets"></div>
+      </div>
+      <div class="boss-section glassmorphic">
+        <h2>Performance Metrics</h2>
+        <div id="boss-performance"></div>
+      </div>
+      <div class="boss-section glassmorphic">
+        <h2>Theme Editor</h2>
+        <input type="color" id="theme-color" value="#1A1A2E">
+        <button id="apply-theme" class="btn blue-glow">Apply Theme</button>
+      </div>
+      <button class="close-modal btn purple-glow">Close</button>
+    </div>
+  </div>
+
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.0/build/qrcode.min.js"></script>
   <script src="app.js"></script>
-  <script src="smart-ai.js"></script>
-  <script src="editor.js"></script>
-  <script src="simplified-ui.js"></script>
 </body>
 </html>
