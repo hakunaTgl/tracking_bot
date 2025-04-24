@@ -4,5 +4,5 @@ document.querySelectorAll('.btn').forEach(btn => {
 });
 
 document.getElementById('hub-main').addEventListener('dblclick', () => {
-  showToast('Double-tap to duplicate bot (placeholder)', 'info');
+  showToast('Double-tap to clone bot (placeholder)', 'info');
 });
