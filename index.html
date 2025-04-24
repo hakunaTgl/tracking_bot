@@ -25,6 +25,7 @@
         <div id="progress" class="progress"></div>
       </div>
       <p id="loading-message">Loading assets...</p>
+      <p id="loading-error" class="error hidden"></p>
       <button id="retry-btn" class="btn blue-glow hidden">Retry</button>
     </div>
   </div>
@@ -32,7 +33,7 @@
     <div class="modal-content glassmorphic">
       <h2>Smart Hub Access</h2>
       <input type="text" id="username" placeholder="Username (optional)">
-      <input type="email" id="email" placeholder="Email" required>
+      <input type="email" id="email" placeholder="Email (optional)">
       <input type="password" id="password" placeholder="Password" required>
       <button id="sign-in-btn" class="btn red-glow">Sign In</button>
       <button id="sign-up-btn" class="btn blue-glow">Sign Up</button>
@@ -41,6 +42,14 @@
     </div>
   </div>
   <div id="hub-main" class="hidden">
+    <div class="notification-bell">
+      <span id="notification-icon">🔔</span>
+      <span id="notification-count" class="hidden">0</span>
+      <div id="notification-dropdown" class="hidden">
+        <h3>Updates</h3>
+        <div id="notification-list"></div>
+      </div>
+    </div>
     <nav class="tab-nav">
       <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
       <button class="tab-btn" data-tab="bots">Bots</button>
@@ -48,110 +57,4 @@
       <button class="tab-btn" data-tab="builder">Bot Builder</button>
       <button class="tab-btn" data-tab="workshop">AI Workshop</button>
       <button class="tab-btn" data-tab="editor">Editor</button>
-      <button class="tab-btn" data-tab="playground">Playground</button>
-      <button class="tab-btn" data-tab="creators">Creator’s Hub</button>
-      <button class="tab-btn" data-tab="collab">Collab Hub</button>
-      <button class="tab-btn" data-tab="voice">Voice Command</button>
-      <button class="tab-btn" data-tab="analytics">Analytics</button>
-      <button class="tab-btn" data-tab="settings">Settings</button>
-    </nav>
-    <div id="dashboard-tab" class="tab-content active">
-      <h2>Dashboard</h2>
-      <div id="dashboard-widgets">
-        <div class="dashboard-widget" data-action="view-bots">Bots: <span id="bot-status">0 active</span></div>
-        <div class="dashboard-widget" data-action="view-weather">Weather: <span id="weather">Loading...</span></div>
-        <div class="dashboard-widget" data-action="view-insights">AI Insights: <span id="ai-insights">Analyzing...</span></div>
-      </div>
-    </div>
-    <div id="bots-tab" class="tab-content hidden">
-      <h2>Bots</h2>
-      <div id="file-upload" class="drop-zone">
-        <p>Drop JSON/YAML blueprints or tap to upload</p>
-        <input type="file" id="file-input" multiple accept=".json,.yaml">
-      </div>
-      <button id="voice-input-btn" class="btn red-glow">Voice Idea</button>
-      <button id="text-input-btn" class="btn red-glow">Text Idea</button>
-      <button id="fusion-btn" class="btn blue-glow">Fuse Bots</button>
-    </div>
-    <div id="inspiration-tab" class="tab-content hidden">
-      <h2>Inspiration Lab</h2>
-      <input type="text" id="meme-search" placeholder="Search memes...">
-      <div id="inspiration-ideas"></div>
-      <button id="generate-idea" class="btn blue-glow">Generate New Idea</button>
-    </div>
-    <div id="builder-tab" class="tab-content hidden">
-      <h2>Bot Builder</h2>
-      <div id="builder-canvas" class="builder-canvas">
-        <div id="builder-components">
-          <div class="component" data-type="action">Action</div>
-          <div class="component" data-type="condition">Condition</div>
-          <div class="component" data-type="api">API Call</div>
-          <div class="component" data-type="meme">Meme Fetch</div>
-          <div class="component" data-type="image">Image Fetch</div>
-        </div>
-        <div id="builder-workspace"></div>
-      </div>
-      <button id="build-bot" class="btn blue-glow">Build Bot</button>
-    </div>
-    <div id="workshop-tab" class="tab-content hidden">
-      <h2>AI Workshop</h2>
-      <textarea id="workshop-code" style="width: 100%; height: 300px;"></textarea>
-      <button id="debug-code" class="btn blue-glow">Debug with AI</button>
-      <div id="workshop-suggestions"></div>
-    </div>
-    <div id="editor-tab" class="tab-content hidden">
-      <h2>Editor</h2>
-      <textarea id="code-editor" style="width: 100%; height: 400px;"></textarea>
-      <button id="share-btn" class="btn blue-glow">Share Code</button>
-    </div>
-    <div id="playground-tab" class="tab-content hidden">
-      <h2>Bot Playground</h2>
-      <div id="bot-playground"></div>
-    </div>
-    <div id="creators-tab" class="tab-content hidden">
-      <h2>Creator’s Hub</h2>
-      <input type="text" id="bot-search" placeholder="Search bots...">
-      <div id="bot-list"></div>
-      <h3>Tracking Logs</h3>
-      <div id="tracking-logs"></div>
-      <h3>Leaderboard</h3>
-      <div id="leaderboard"></div>
-    </div>
-    <div id="collab-tab" class="tab-content hidden">
-      <h2>Collab Hub</h2>
-      <input type="text" id="collab-user" placeholder="Invite user by email...">
-      <button id="invite-user" class="btn blue-glow">Invite</button>
-      <div id="collab-space"></div>
-    </div>
-    <div id="voice-tab" class="tab-content hidden">
-      <h2>Voice Command Center</h2>
-      <button id="start-voice" class="btn red-glow">Start Listening</button>
-      <div id="voice-output"></div>
-    </div>
-    <div id="analytics-tab" class="tab-content hidden">
-      <h2>Analytics Dashboard</h2>
-      <div id="analytics-stats"></div>
-    </div>
-    <div id="settings-tab" class="tab-content hidden">
-      <h2>Settings</h2>
-      <label><input type="checkbox" id="enable-narration"> AI Narration</label>
-      <label><input type="checkbox" id="mentor-mode"> AI Mentor</label>
-      <label><input type="checkbox" id="telegram-notifs"> Telegram Notifications</label>
-      <input type="text" id="telegram-token" placeholder="Telegram Bot Token" value="7264906653:AAFg1NQr3k3XTcqRHJJacnZ8_pliOWZa6rY">
-      <input type="text" id="telegram-chat-id" placeholder="Telegram Chat ID">
-      <button id="fetch-chat-id" class="btn blue-glow">Fetch Chat ID</button>
-      <select id="language-select">
-        <option value="en">English</option>
-        <option value="es">Spanish</option>
-        <option value="fr">French</option>
-      </select>
-      <button id="theme-toggle" class="btn blue-glow">Toggle Theme</button>
-      <button id="webhook-setup" class="btn blue-glow">Setup Webhook</button>
-    </div>
-  </div>
-  <script src="app.js"></script>
-  <script src="smart-ai.js"></script>
-  <script src="editor.js"></script>
-  <script src="simplified-ui.js"></script>
-</body>
-</html>
+      <button class="tab-btn" data-tab="playground">Play
