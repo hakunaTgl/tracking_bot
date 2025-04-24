@@ -4,21 +4,29 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#33B5FF">
-  <title>Smart Hub</title>
-  <link rel="stylesheet" href="styles.css">
-  <link rel="manifest" href="manifest.json">
-  <link rel="icon" href="icon.png" onerror="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/wcAAwAB/ALXy5YAAAAASUVORK5CYII='">
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
-  <!-- Defer Three.js until after login -->
+  <title>Smart Hub Ultra</title>
+  <style>
+    body { margin: 0; font-family: Arial, sans-serif; background: #1A1A2E; color: #F5F6F5; }
+    .modal { display: flex; justify-content: center; align-items: center; height: 100vh; }
+    .glassmorphic { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); border-radius: 10px; padding: 20px; }
+    .btn { padding: 15px; border: none; border-radius: 5px; cursor: pointer; font-size: 1.2em; }
+    .blue-glow { background: #33B5FF; box-shadow: 0 0 10px #33B5FF; }
+    .red-glow { background: #FF3333; box-shadow: 0 0 10px #FF3333; }
+    .progress-bar { width: 100%; height: 8px; background: #333; border-radius: 5px; }
+    .progress { height: 100%; background: #33B5FF; width: 0; transition: width 0.3s; }
+    #file-upload, #bot-playground, #ar-preview { padding: 10px; margin: 10px; border: 2px dashed #33B5FF; }
+    .dashboard-widget { background: rgba(255, 255, 255, 0.05); padding: 10px; margin: 5px; border-radius: 5px; }
+    .hidden { display: none; }
+  </style>
 </head>
 <body>
   <div id="loading" class="modal">
     <div class="modal-content glassmorphic">
-      <h2>Loading Smart Hub...</h2>
+      <h2>Loading Smart Hub Ultra...</h2>
       <div class="progress-bar">
         <div id="progress" class="progress"></div>
       </div>
-      <p id="loading-message">Initializing systems...</p>
+      <p id="loading-message">Prioritizing assets...</p>
       <button id="retry-btn" class="btn blue-glow hidden">Retry</button>
     </div>
   </div>
@@ -27,30 +35,37 @@
       <h2>Error Loading Hub</h2>
       <p id="error-message">An error occurred. Please try refreshing.</p>
       <button id="retry-btn-error" class="btn blue-glow">Retry</button>
-      <button id="voice-retry-btn" class="btn red-glow">Retry (Voice)</button>
     </div>
   </div>
-  <div id="login-modal" class="modal">
+  <div id="login-modal" class="modal hidden">
     <div class="modal-content glassmorphic">
       <h2>Smart Hub Login</h2>
-      <input type="email" id="email" placeholder="Email" autofocus required>
-      <input type="password" id="password" placeholder="Password" autocomplete="off" required>
+      <input type="email" id="email" placeholder="Email" required>
+      <input type="password" id="password" placeholder="Password" required>
       <button id="sign-in-btn" class="btn red-glow">Sign In</button>
-      <button id="sign-up-btn" class="btn blue-glow">Sign Up</button>
+      <button id="biometric-btn" class="btn blue-glow">Use Biometrics</button>
+      <button id="mfa-btn" class="btn blue-glow">Enable MFA</button>
       <p id="auth-error" class="error hidden"></p>
+      <div id="login-spinner" class="hidden">Logging in...</div>
     </div>
   </div>
-  <div id="metaverse-canvas" class="metaverse-container hidden"></div>
   <div id="hub-main" class="hidden">
     <nav class="tab-nav">
-      <button class="tab-btn active" data-tab="bots">Bots</button>
-      <button class="tab-btn" data-tab="logs">Logs</button>
-      <button class="tab-btn" data-tab="analytics">Analytics</button>
+      <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
+      <button class="tab-btn" data-tab="bots">Bots</button>
+      <button class="tab-btn" data-tab="editor">Editor</button>
+      <button class="tab-btn" data-tab="playground">Playground</button>
       <button class="tab-btn" data-tab="settings">Settings</button>
-      <button id="theme-toggle" class="btn blue-glow">Toggle Theme</button>
-      <button id="logout-btn" class="btn red-glow">Logout</button>
     </nav>
-    <div id="bots-tab" class="tab-content active">
+    <div id="dashboard-tab" class="tab-content active">
+      <h2>Dashboard</h2>
+      <div id="dashboard-widgets">
+        <div class="dashboard-widget">Bot Status: <span id="bot-status">0 active</span></div>
+        <div class="dashboard-widget">Weather: <span id="weather">Loading...</span></div>
+        <div class="dashboard-widget">AI Insights: <span id="ai-insights">Analyzing...</span></div>
+      </div>
+    </div>
+    <div id="bots-tab" class="tab-content hidden">
       <h2>Bots</h2>
       <div id="file-upload" class="drop-zone">
         <p>Drop blueprints (JSON, YAML) or click to upload</p>
@@ -58,199 +73,27 @@
       </div>
       <button id="voice-input-btn" class="btn red-glow">Describe Bot (Voice)</button>
       <button id="text-input-btn" class="btn red-glow">Describe Bot (Text)</button>
-      <button id="template-btn" class="btn blue-glow">Use Template</button>
-      <div id="text-input" class="panel hidden">
-        <p>Describe your bot:</p>
-        <input type="text" id="text-answer" placeholder="E.g., Build a weather bot every 5 minutes">
-        <button id="submit-text" class="btn blue-glow">Submit</button>
-      </div>
-      <div id="clarify-input" class="panel hidden">
-        <p id="clarify-question"></p>
-        <input type="text" id="clarify-answer" placeholder="Your answer...">
-        <button id="submit-clarify" class="btn blue-glow">Submit</button>
-      </div>
-      <div id="template-panel" class="panel hidden">
-        <h3>Bot Templates</h3>
-        <button class="template-option" data-type="weather">Weather Bot</button>
-        <button class="template-option" data-type="twitter">Twitter Bot</button>
-        <button class="template-option" data-type="scraper">Scraper Bot</button>
-        <button class="template-option" data-type="custom">Custom Bot</button>
-      </div>
-      <h3>Active Bots</h3>
-      <div id="batch-actions" class="hidden">
-        <button id="batch-start" class="btn green-glow">Start Selected</button>
-        <button id="batch-stop" class="btn red-glow">Stop Selected</button>
-        <button id="batch-delete" class="btn red-glow">Delete Selected</button>
-        <button id="batch-share" class="btn blue-glow">Share Selected</button>
-      </div>
-      <div id="bot-list"></div>
+      <button id="collab-btn" class="btn blue-glow">Start Collaboration</button>
+      <button id="ar-preview-btn" class="btn blue-glow">AR Preview</button>
     </div>
-    <div id="logs-tab" class="tab-content hidden">
-      <h2>Logs</h2>
-      <input type="text" id="log-search" placeholder="Search logs...">
-      <button id="download-logs" class="btn blue-glow">Download Logs</button>
-      <div id="log-list"></div>
+    <div id="editor-tab" class="tab-content hidden">
+      <h2>Editor</h2>
+      <textarea id="code-editor" style="width: 100%; height: 400px; font-family: monospace;"></textarea>
+      <button id="schedule-task-btn" class="btn blue-glow">Schedule Task</button>
     </div>
-    <div id="analytics-tab" class="tab-content hidden">
-      <h2>Analytics</h2>
-      <canvas id="analytics-chart"></canvas>
+    <div id="playground-tab" class="tab-content hidden">
+      <h2>Bot Playground</h2>
+      <div id="bot-playground"></div>
     </div>
     <div id="settings-tab" class="tab-content hidden">
       <h2>Settings</h2>
-      <label><input type="checkbox" id="enable-metaverse"> Enable Metaverse</label>
-      <label><input type="checkbox" id="enable-narration" checked> Enable AI Narration</label>
-      <label><input type="checkbox" id="learning-mode"> Enable AI Learning Mode</label>
-      <button id="clear-cache" class="btn red-glow">Clear Cache</button>
-    </div>
-    <div id="edit-bot-tab" class="tab-content hidden">
-      <h2>Edit Bot</h2>
-      <p id="edit-bot-name"></p>
-      <textarea id="code-editor" style="width: 100%; height: 400px; font-family: monospace;"></textarea>
-      <button id="save-edit-btn" class="btn blue-glow">Save Changes</button>
-      <button id="edit-back-btn" class="btn blue-glow">Back</button>
-    </div>
-    <div id="ai-avatar-panel" class="avatar-panel glassmorphic toggleable" data-state="open">
-      <div id="avatar-3d"></div>
-      <p id="ai-message">Ready to forge your bot empire, Commander?</p>
-      <button id="ai-toggle" class="btn blue-glow">Toggle AI</button>
-    </div>
-    <div id="toast" class="toast hidden"></div>
-    <div id="confirm-dialog" class="modal hidden">
-      <div class="modal-content glassmorphic">
-        <h2>Confirm Action</h2>
-        <p id="confirm-message"></p>
-        <button id="confirm-yes" class="btn red-glow">Approve</button>
-        <button id="confirm-no" class="btn blue-glow">Cancel</button>
-      </div>
-    </div>
-    <div id="share-panel" class="panel hidden">
-      <h3>Share Bots</h3>
-      <input type="email" id="share-email" placeholder="Recipient email">
-      <button id="share-submit" class="btn blue-glow">Share</button>
-    </div>
-    <div id="debug-panel" class="panel hidden">
-      <h3>Debug Logs</h3>
-      <div id="debug-logs"></div>
-      <button id="close-debug" class="btn blue-glow">Close</button>
+      <label><input type="checkbox" id="enable-narration"> Enable AI Narration</label>
+      <label><input type="checkbox" id="zen-mode"> Enable Zen Mode</label>
+      <label><input type="checkbox" id="gesture-controls"> Enable Gesture Controls</label>
+      <button id="theme-toggle" class="btn blue-glow">Toggle Theme</button>
+      <button id="zapier-connect" class="btn blue-glow">Connect Zapier</button>
     </div>
   </div>
-  <script>
-    console.log('App initializing...');
-    let progress = 0;
-    const progressBar = document.getElementById('progress');
-    const loadingMessage = document.getElementById('loading-message');
-    const retryBtn = document.getElementById('retry-btn');
-
-    const updateProgress = (msg) => {
-      progress += 20;
-      progressBar.style.width = `${progress}%`;
-      loadingMessage.textContent = msg;
-      if (progress >= 100) {
-        document.getElementById('loading').classList.add('hidden');
-        document.getElementById('login-modal').classList.remove('hidden');
-      }
-    };
-
-    updateProgress('Checking assets...');
-
-    // Improved asset checking with retries and timeout
-    const checkAsset = async (url, name, retries = 3) => {
-      for (let i = 0; i < retries; i++) {
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 5000);
-          const response = await fetch(url, { signal: controller.signal });
-          clearTimeout(timeoutId);
-          if (!response.ok) throw new Error(`Failed to load ${name}: ${response.status}`);
-          return true;
-        } catch (error) {
-          console.error(`Asset error (attempt ${i + 1}): ${name}`, error);
-          if (i === retries - 1) {
-            showError(`Failed to load ${name}: ${error.message}`);
-            return false;
-          }
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-      }
-    };
-
-    // Initialize Service Worker
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/service-worker.js')
-        .then(reg => {
-          console.log('Service Worker registered:', reg);
-          updateProgress('Service Worker ready...');
-        })
-        .catch(err => {
-          console.error('Service Worker error:', err);
-          updateProgress('Service Worker failed...');
-          showError(`Service Worker failed: ${err.message}`);
-        });
-    } else {
-      updateProgress('Service Worker not supported...');
-      showError('Service Worker not supported by browser');
-    }
-
-    // Check assets and initialize
-    (async () => {
-      const results = await Promise.all([
-        checkAsset('styles.css', 'styles'),
-        checkAsset('app.js', 'app script'),
-        checkAsset('bot-worker.js', 'bot worker'),
-        checkAsset('icon.png', 'icon', 1) // Skip retries for icon
-      ]);
-      if (results.every(r => r)) {
-        updateProgress('Assets loaded...');
-        updateProgress('Ready!');
-      }
-      // Force login modal after 5s even if progress incomplete
-      setTimeout(() => {
-        if (!document.getElementById('loading').classList.contains('hidden')) {
-          document.getElementById('loading').classList.add('hidden');
-          document.getElementById('login-modal').classList.remove('hidden');
-        }
-      }, 5000);
-    })();
-
-    // Timeout for slow devices
-    setTimeout(() => {
-      if (document.getElementById('loading').classList.contains('hidden')) return;
-      document.getElementById('loading').classList.add('hidden');
-      document.getElementById('error').classList.remove('hidden');
-      document.getElementById('error-message').textContent = 'Failed to load resources. Check your connection or clear cache.';
-      retryBtn.classList.remove('hidden');
-    }, 15000);
-
-    // Enhanced global error handler
-    window.addEventListener('error', e => {
-      console.error('Global error:', e.message, e.filename, e.lineno);
-      showError(`Error: ${e.message} in ${e.filename}:${e.lineno}`);
-      IDB.set('logs', Date.now().toString(), { 
-        message: `Global error: ${e.message} in ${e.filename}:${e.lineno}`, 
-        timestamp: Date.now() 
-      });
-    });
-
-    window.addEventListener('unhandledrejection', e => {
-      console.error('Unhandled promise rejection:', e.reason);
-      showError(`Promise error: ${e.reason}`);
-      IDB.set('logs', Date.now().toString(), { 
-        message: `Promise error: ${e.reason}`, 
-        timestamp: Date.now() 
-      });
-    });
-
-    document.getElementById('retry-btn').addEventListener('click', () => location.reload());
-    document.getElementById('retry-btn-error').addEventListener('click', () => location.reload());
-    document.getElementById('voice-retry-btn').addEventListener('click', () => {
-      const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-      recognition.lang = 'en-US';
-      recognition.start();
-      recognition.onresult = e => {
-        if (e.results[0][0].transcript.toLowerCase().includes('retry')) location.reload();
-      };
-    });
-  </script>
   <script src="app.js"></script>
 </body>
 </html>
