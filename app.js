@@ -1,9 +1,23 @@
+// Firebase Configuration (from your past request)
+const firebaseConfig = {
+  apiKey: "AIzaSyC8qPo1m1Na6u20e3b3Qf8eCfk5EBn15o",
+  authDomain: "smarthubultra.firebaseapp.com",
+  databaseURL: "https://smarthubultra-default-rtdb.firebaseio.com",
+  projectId: "smarthubultra",
+  storageBucket: "smarthubultra.appspot.com",
+  messagingSenderId: "1045339361627",
+  appId: "1:1045339361627:web:6d3a5c7e1e1d2f5a4b3c2d",
+  measurementId: "G-5X7Y2T8Z9Q"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
 class IDB {
   static async init() {
     for (let i = 0; i < 5; i++) {
       try {
         return await new Promise((resolve, reject) => {
-          const req = indexedDB.open('SmartHubDB', 7);
+          const req = indexedDB.open('SmartHubDB', 8);
           req.onupgradeneeded = e => {
             const db = e.target.result;
             if (!db.objectStoreNames.contains('bots')) db.createObjectStore('bots', { keyPath: 'id' });
@@ -12,6 +26,7 @@ class IDB {
             if (!db.objectStoreNames.contains('cache')) db.createObjectStore('cache', { keyPath: 'key' });
             if (!db.objectStoreNames.contains('collab')) db.createObjectStore('collab', { keyPath: 'id' });
             if (!db.objectStoreNames.contains('analytics')) db.createObjectStore('analytics', { keyPath: 'id' });
+            if (!db.objectStoreNames.contains('marketplace')) db.createObjectStore('marketplace', { keyPath: 'id' });
           };
           req.onsuccess = e => resolve(e.target.result);
           req.onerror = e => reject(new Error(`IndexedDB error: ${e.target.error.message}`));
@@ -64,15 +79,24 @@ const translations = {
   fr: { welcome: "Bienvenue sur Smart Hub Ultra", bots: "Bots", create: "Créer", run: "Exécuter" }
 };
 
-async function signUp(email, password, username = '') {
+const updates = [
+  { message: "New Feature: Notification Bell Added", type: "feature", timestamp: Date.now() },
+  { message: "Fix: Voice Input Now Works on Android", type: "fix", timestamp: Date.now() },
+  { message: "Known Issue: Text Input Wizard May Lag on Slow Devices", type: "issue", timestamp: Date.now() }
+];
+
+async function signUp(email, username, password) {
   try {
     document.getElementById('login-spinner').classList.remove('hidden');
-    if (!email.includes('@') || email.length < 3) throw new Error('Invalid email');
+    if (!email && !username) throw new Error('Email or username required');
     if (password.length < 6) throw new Error('Password too short');
-    const user = await IDB.get('users', email);
-    if (user) throw new Error('Email already registered');
-    await IDB.batchSet('users', [{ email, password, username, createdAt: Date.now(), points: 0 }]);
-    localStorage.setItem('currentUser', email);
+    const userByEmail = email ? await IDB.get('users', email) : null;
+    const userByUsername = username ? await IDB.get('users', username) : null;
+    if (userByEmail || userByUsername) throw new Error('Email or username already registered');
+    const user = { email: email || username, username, password, createdAt: Date.now(), points: 0, role: 'user' };
+    await IDB.batchSet('users', [user]);
+    localStorage.setItem('currentUser', email || username);
+    db.ref('users/' + (email || username).replace(/[^a-zA-Z0-9]/g, '')).set(user);
     showToast('Signed up!', 'success');
     document.getElementById('login-modal').classList.add('hidden');
     document.getElementById('hub-main').classList.remove('hidden');
@@ -87,18 +111,23 @@ async function signUp(email, password, username = '') {
   }
 }
 
-async function signIn(email, password) {
+async function signIn(loginId, password) {
   try {
     document.getElementById('login-spinner').classList.remove('hidden');
-    if (!email || !password) throw new Error('Email and password required');
-    const user = await IDB.get('users', email);
+    if (!loginId || !password) throw new Error('Login ID and password required');
+    let user = await IDB.get('users', loginId);
+    if (!user) {
+      const users = await IDB.getAll('users');
+      user = users.find(u => u.username === loginId || u.email === loginId);
+    }
     if (!user) throw new Error('User not found');
     if (user.password !== password) throw new Error('Wrong password');
-    localStorage.setItem('currentUser', email);
+    localStorage.setItem('currentUser', user.email);
     showToast('Signed in!', 'success');
     document.getElementById('login-modal').classList.add('hidden');
     document.getElementById('hub-main').classList.remove('hidden');
     showWelcome();
+    if (user.email === 'boss@smarthub.com') document.querySelector('[data-tab="boss"]').style.display = 'block';
     narrate('Signed in to Smart Hub!');
   } catch (error) {
     document.getElementById('auth-error').textContent = error.message;
@@ -133,6 +162,7 @@ function setupTabs() {
       else if (tab.dataset.tab === 'collab') loadCollabHub();
       else if (tab.dataset.tab === 'voice') setupVoiceCommand();
       else if (tab.dataset.tab === 'analytics') loadAnalytics();
+      else if (tab.dataset.tab === 'boss') loadBossPage();
       narrate(`Switched to ${tab.dataset.tab}`);
     });
     tab.addEventListener('touchstart', () => tab.classList.add('active'));
@@ -164,10 +194,10 @@ async function loadDashboard() {
 
 function updateTheme(weather) {
   const themes = {
-    clear: '#FFD700', // Sunny
-    clouds: '#B0C4DE', // Cloudy
-    rain: '#4682B4', // Rainy
-    snow: '#F0F8FF' // Snowy
+    clear: '#FFD700',
+    clouds: '#B0C4DE',
+    rain: '#4682B4',
+    snow: '#F0F8FF'
   };
   document.body.style.background = themes[weather] || '#1A1A2E';
 }
@@ -190,6 +220,7 @@ async function loadCreatorsHub() {
       <button class="btn blue-glow edit-bot">Edit</button>
       <button class="btn blue-glow clone-bot">Clone</button>
       <button class="btn blue-glow share-bot">Share</button>
+      <button class="btn blue-glow publish-bot">Publish to Marketplace</button>
     `;
     botList.appendChild(item);
     item.querySelector('.run-bot').addEventListener('click', async () => {
@@ -206,6 +237,7 @@ async function loadCreatorsHub() {
     item.querySelector('.clone-bot').addEventListener('click', async () => {
       const newBot = { ...bot, id: Date.now().toString(), name: `${bot.name} (Clone)` };
       await IDB.batchSet('bots', [newBot]);
+      db.ref('bots/' + newBot.id).set(newBot);
       TrackingBot.log(newBot.id, 'clone', 'success', `Cloned ${bot.name}`);
       showToast(`Cloned ${bot.name}`, 'success');
       loadCreatorsHub();
@@ -227,6 +259,12 @@ async function loadCreatorsHub() {
       } else {
         showToast('Set Telegram token and chat ID in Settings', 'error');
       }
+    });
+    item.querySelector('.publish-bot').addEventListener('click', async () => {
+      const marketplaceBot = { id: bot.id, name: bot.name, purpose: bot.purpose, code: bot.code, creator: localStorage.getItem('currentUser') };
+      await IDB.batchSet('marketplace', [marketplaceBot]);
+      showToast(`Published ${bot.name} to Marketplace`, 'success');
+      loadMarketplace();
     });
   });
 
@@ -256,10 +294,37 @@ async function loadCreatorsHub() {
     leaderboard.appendChild(item);
   });
 
+  loadMarketplace();
+
   document.getElementById('bot-search').addEventListener('input', e => {
     const search = e.target.value.toLowerCase();
     botList.querySelectorAll('.bot-item').forEach(item => {
       item.style.display = item.textContent.toLowerCase().includes(search) ? '' : 'none';
+    });
+  });
+}
+
+async function loadMarketplace() {
+  const marketplace = document.getElementById('marketplace');
+  marketplace.innerHTML = '';
+  const bots = await IDB.getAll('marketplace');
+  bots.forEach(bot => {
+    const item = document.createElement('div');
+    item.className = 'bot-item';
+    item.innerHTML = `
+      <h3>${bot.name}</h3>
+      <p><b>Creator:</b> ${bot.creator}</p>
+      <p><b>Purpose:</b> ${bot.purpose}</p>
+      <button class="btn blue-glow import-bot">Import</button>
+    `;
+    marketplace.appendChild(item);
+    item.querySelector('.import-bot').addEventListener('click', async () => {
+      const newBot = { ...bot, id: Date.now().toString(), creator: localStorage.getItem('currentUser') };
+      await IDB.batchSet('bots', [newBot]);
+      db.ref('bots/' + newBot.id).set(newBot);
+      TrackingBot.log(newBot.id, 'import', 'success', `Imported ${bot.name} from Marketplace`);
+      showToast(`Imported ${bot.name}`, 'success');
+      loadCreatorsHub();
     });
   });
 }
@@ -279,6 +344,7 @@ async function runBot(bot) {
       playground.innerHTML += `<img src="${result}" class="image-preview">`;
     }
     await IDB.batchSet('bots', [{ ...bot, success: Math.min(100, bot.success + 1), runs: (bot.runs || 0) + 1 }]);
+    suggestBotImprovement(bot);
   } catch (error) {
     playground.innerHTML += `<p>Error: ${error.message}</p>`;
     TrackingBot.log(bot.id, 'run', 'error', `Error running ${bot.name}: ${error.message}`);
@@ -286,6 +352,14 @@ async function runBot(bot) {
   }
   document.querySelector('[data-tab="playground"]').click();
   await logAnalytics('bot_run', { botId: bot.id, runtime: performance.now() - startTime });
+}
+
+async function suggestBotImprovement(bot) {
+  const logs = await IDB.getAll('tracking');
+  const botLogs = logs.filter(log => log.botId === bot.id && log.status === 'error');
+  if (botLogs.length > 2) {
+    showToast(`Suggestion: ${bot.name} has frequent errors. Try adding error handling: try { ... } catch (e) { console.error(e); }`, 'info');
+  }
 }
 
 async function loadInspirationLab() {
@@ -334,9 +408,11 @@ async function loadInspirationLab() {
         functionality: 'Inspired bot',
         success: 99,
         input: idea.desc,
-        code: idea.code
+        code: idea.code,
+        creator: localStorage.getItem('currentUser')
       };
       await IDB.batchSet('bots', [bot]);
+      db.ref('bots/' + bot.id).set(bot);
       TrackingBot.log(bot.id, 'create', 'success', `Created ${bot.name} from Inspiration Lab`);
       showToast(`Created ${bot.name}`, 'success');
       updateUserPoints(20);
@@ -383,9 +459,11 @@ async function loadInspirationLab() {
           const url = data.data[0].images.fixed_height.url;
           await IDB.batchSet('cache', [{ key: 'meme-${query}', value: url, timestamp: Date.now() }]);
           return url;
-        }`
+        }`,
+        creator: localStorage.getItem('currentUser')
       };
       await IDB.batchSet('bots', [bot]);
+      db.ref('bots/' + bot.id).set(bot);
       TrackingBot.log(bot.id, 'create', 'success', `Created ${bot.name} from Inspiration Lab`);
       showToast(`Created ${bot.name}`, 'success');
       updateUserPoints(20);
@@ -419,9 +497,11 @@ async function loadInspirationLab() {
           const res = await fetch('https://api.giphy.com/v1/gifs/trending?api_key=kOrIThLFfVdinZ3ORGBDmmX6cnnVWTzK');
           const data = await res.json();
           return data.data[0].images.fixed_height.url;
-        }`
+        }`,
+        creator: localStorage.getItem('currentUser')
       };
       await IDB.batchSet('bots', [bot]);
+      db.ref('bots/' + bot.id).set(bot);
       TrackingBot.log(bot.id, 'create', 'success', `Created ${bot.name} from Inspiration Lab`);
       showToast(`Created ${bot.name}`, 'success');
       updateUserPoints(20);
@@ -471,9 +551,11 @@ async function setupBotBuilder() {
       functionality: 'Custom logic',
       success: 99,
       input: 'Drag-and-drop',
-      code
+      code,
+      creator: localStorage.getItem('currentUser')
     };
     await IDB.batchSet('bots', [bot]);
+    db.ref('bots/' + bot.id).set(bot);
     TrackingBot.log(bot.id, 'create', 'success', `Created ${bot.name} from Bot Builder`);
     showToast(`Created ${bot.name}`, 'success');
     updateUserPoints(30);
@@ -543,17 +625,22 @@ function setupVoiceCommand() {
       const command = e.results[0][0].transcript.toLowerCase();
       output.innerHTML += `<p>Command: ${command}</p>`;
       if (command.includes('create') && command.includes('bot')) {
-        const type = command.includes('weather') ? 'weather' : command.includes('meme') ? 'm imbue includes('image') ? 'meme' : 'weather';
         const result = await SmartAI.processInput(command, 'voice');
-        await IDB.batchSet('bots', [result.params]);
-        TrackingBot.log(result.params.id, 'create', 'success', `Created ${result.params.name} via voice`);
-        showToast(`Created ${result.params.name}`, 'success');
+        const bot = result.params;
+        bot.creator = localStorage.getItem('currentUser');
+        await IDB.batchSet('bots', [bot]);
+        db.ref('bots/' + bot.id).set(bot);
+        TrackingBot.log(bot.id, 'create', 'success', `Created ${bot.name} via voice`);
+        showToast(`Created ${bot.name}`, 'success');
         updateUserPoints(25);
         loadCreatorsHub();
         document.querySelector('[data-tab="creators"]').click();
       }
     };
-    recognition.onerror = e => output.innerHTML += `<p>Error: ${e.error}</p>`;
+    recognition.onerror = e => {
+      output.innerHTML += `<p>Error: ${e.error}</p>`;
+      showToast('Voice input failed. Ensure microphone access and try again.', 'error');
+    };
     recognition.start();
   });
 }
@@ -572,6 +659,38 @@ async function loadAnalytics() {
   `;
 }
 
+async function loadBossPage() {
+  const users = await IDB.getAll('users');
+  const bots = await IDB.getAll('bots');
+  const usersList = document.getElementById('boss-users');
+  const botsList = document.getElementById('boss-bots');
+  usersList.innerHTML = '';
+  botsList.innerHTML = '';
+  users.forEach(user => {
+    const item = document.createElement('div');
+    item.className = 'bot-item';
+    item.innerHTML = `
+      <h3>${user.username || user.email}</h3>
+      <p><b>Email:</b> ${user.email}</p>
+      <p><b>Username:</b> ${user.username || 'N/A'}</p>
+      <p><b>Password:</b> ${user.password}</p>
+      <p><b>Points:</b> ${user.points}</p>
+    `;
+    usersList.appendChild(item);
+  });
+  bots.forEach(bot => {
+    const item = document.createElement('div');
+    item.className = 'bot-item';
+    item.innerHTML = `
+      <h3>${bot.name}</h3>
+      <p><b>Creator:</b> ${bot.creator}</p>
+      <p><b>Purpose:</b> ${bot.purpose}</p>
+      <pre>${bot.code}</pre>
+    `;
+    botsList.appendChild(item);
+  });
+}
+
 async function logAnalytics(event, data) {
   await IDB.batchSet('analytics', [{ id: Date.now().toString(), event, data, timestamp: Date.now() }]);
 }
@@ -579,7 +698,9 @@ async function logAnalytics(event, data) {
 async function updateUserPoints(points) {
   const email = localStorage.getItem('currentUser');
   const user = await IDB.get('users', email);
-  await IDB.batchSet('users', [{ ...user, points: (user.points || 0) + points }]);
+  const newPoints = (user.points || 0) + points;
+  await IDB.batchSet('users', [{ ...user, points: newPoints }]);
+  db.ref('users/' + email.replace(/[^a-zA-Z0-9]/g, '')).update({ points: newPoints });
 }
 
 function showToast(message, type) {
@@ -599,38 +720,116 @@ function narrate(message) {
   }
 }
 
+function setupNotifications() {
+  const icon = document.getElementById('notification-icon');
+  const count = document.getElementById('notification-count');
+  const dropdown = document.getElementById('notification-dropdown');
+  const list = document.getElementById('notification-list');
+  list.innerHTML = '';
+  updates.forEach(update => {
+    const item = document.createElement('div');
+    item.className = 'log-item';
+    item.innerHTML = `
+      <p><b>${update.type.charAt(0).toUpperCase() + update.type.slice(1)}:</b> ${update.message}</p>
+      <p><b>Time:</b> ${new Date(update.timestamp).toLocaleString()}</p>
+    `;
+    list.appendChild(item);
+  });
+  count.textContent = updates.length;
+  count.classList.remove('hidden');
+  icon.addEventListener('click', () => {
+    dropdown.classList.toggle('hidden');
+    if (!dropdown.classList.contains('hidden')) {
+      count.classList.add('hidden');
+    }
+  });
+}
+
 document.getElementById('sign-up-btn').addEventListener('click', () => {
   const email = document.getElementById('email').value;
-  const password = document.getElementById('password').value;
   const username = document.getElementById('username').value;
-  signUp(email, password, username);
+  const password = document.getElementById('password').value;
+  signUp(email, username, password);
 });
 
 document.getElementById('sign-in-btn').addEventListener('click', () => {
-  const email = document.getElementById('email').value;
+  const loginId = document.getElementById('email').value || document.getElementById('username').value;
   const password = document.getElementById('password').value;
-  signIn(email, password);
+  signIn(loginId, password);
 });
 
 document.getElementById('dismiss-welcome').addEventListener('click', () => {
   document.getElementById('welcome-overlay').classList.add('hidden');
 });
 
-document.getElementById('voice-input-btn').addEventListener('click', async () => {
-  const input = 'Create a meme bot'; // Simulated voice input
-  const result = await SmartAI.processInput(input, 'voice');
-  await IDB.batchSet('bots', [result.params]);
-  TrackingBot.log(result.params.id, 'create', 'success', `Created ${result.params.name}`);
-  showToast('Bot created via voice', 'success');
+document.getElementById('use-wizard').addEventListener('change', e => {
+  document.getElementById('creation-wizard').classList.toggle('hidden', !e.target.checked);
+  document.getElementById('file-upload').classList.toggle('hidden', e.target.checked);
+  document.getElementById('text-input-section').classList.toggle('hidden', e.target.checked);
+  document.getElementById('voice-input-btn').classList.toggle('hidden', e.target.checked);
+});
+
+document.getElementById('submit-wizard').addEventListener('click', async () => {
+  const description = document.getElementById('bot-description').value;
+  const blueprint = document.getElementById('bot-blueprint').files[0];
+  const reviewDiv = document.getElementById('bot-review');
+  reviewDiv.classList.remove('hidden');
+  reviewDiv.innerHTML = '<p>Reviewing input...</p>';
+  let input = description;
+  if (blueprint) {
+    input += `\nBlueprint: ${await blueprint.text()}`;
+  }
+  const summary = `Summary of input: ${input.slice(0, 100)}...`;
+  reviewDiv.innerHTML = `<p>${summary}</p>`;
+  const result = await SmartAI.processInput(input, 'text');
+  const bot = result.params;
+  bot.creator = localStorage.getItem('currentUser');
+  await IDB.batchSet('bots', [bot]);
+  db.ref('bots/' + bot.id).set(bot);
+  TrackingBot.log(bot.id, 'create', 'success', `Created ${bot.name} via wizard`);
+  showToast(`Created ${bot.name}`, 'success');
   updateUserPoints(25);
   loadCreatorsHub();
+  document.querySelector('[data-tab="creators"]').click();
+});
+
+document.getElementById('voice-input-btn').addEventListener('click', async () => {
+  const output = document.getElementById('bot-review');
+  output.classList.remove('hidden');
+  output.innerHTML = '<p>Listening...</p>';
+  const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+  recognition.lang = localStorage.getItem('language') || 'en-US';
+  recognition.onresult = async e => {
+    const command = e.results[0][0].transcript;
+    output.innerHTML = `<p>Input: ${command}</p>`;
+    const result = await SmartAI.processInput(command, 'voice');
+    const bot = result.params;
+    bot.creator = localStorage.getItem('currentUser');
+    await IDB.batchSet('bots', [bot]);
+    db.ref('bots/' + bot.id).set(bot);
+    TrackingBot.log(bot.id, 'create', 'success', `Created ${bot.name} via voice`);
+    showToast('Bot created via voice', 'success');
+    updateUserPoints(25);
+    loadCreatorsHub();
+  };
+  recognition.onerror = e => {
+    output.innerHTML = `<p>Error: ${e.error}</p>`;
+    showToast('Voice input failed. Ensure microphone access and try again.', 'error');
+  };
+  recognition.start();
 });
 
 document.getElementById('text-input-btn').addEventListener('click', async () => {
-  const input = 'Create a weather bot';
+  const input = document.getElementById('text-input').value;
+  const reviewDiv = document.getElementById('bot-review');
+  reviewDiv.classList.remove('hidden');
+  reviewDiv.innerHTML = `<p>Input: ${input}</p>`;
   const result = await SmartAI.processInput(input, 'text');
-  await IDB.batchSet('bots', [result.params]);
-  TrackingBot.log(result.params.id, 'create', 'success', `Created ${result.params.name}`);
+  const bot = result.params;
+  bot.creator = localStorage.getItem('currentUser');
+  await IDB.batchSet('bots', [bot]);
+  db.ref('bots/' + bot.id).set(bot);
+  TrackingBot.log(bot.id, 'create', 'success', `Created ${bot.name} via text`);
   showToast('Bot created via text', 'success');
   updateUserPoints(25);
   loadCreatorsHub();
@@ -655,13 +854,41 @@ document.getElementById('fusion-btn').addEventListener('click', async () => {
       const result1 = await (${bot1.code})();
       const result2 = await (${bot2.code})();
       return \`Combined: \${result1} + \${result2}\`;
-    }`
+    }`,
+    creator: localStorage.getItem('currentUser')
   };
   await IDB.batchSet('bots', [fusedBot]);
+  db.ref('bots/' + fusedBot.id).set(fusedBot);
   TrackingBot.log(fusedBot.id, 'create', 'success', `Created ${fusedBot.name} via fusion`);
   showToast(`Created ${fusedBot.name}`, 'success');
   updateUserPoints(50);
   loadCreatorsHub();
+});
+
+document.getElementById('run-code').addEventListener('click', async () => {
+  const code = document.getElementById('code-editor').value;
+  const output = document.getElementById('code-output');
+  output.innerHTML = 'Running...';
+  const worker = new Worker(URL.createObjectURL(new Blob([`
+    onmessage = async e => {
+      try {
+        const func = new Function('return ' + e.data)();
+        const result = await func();
+        postMessage({ result });
+      } catch (error) {
+        postMessage({ error: error.message });
+      }
+    };
+  `], { type: 'application/javascript' })));
+  worker.onmessage = e => {
+    if (e.data.error) {
+      output.innerHTML = `Error: ${e.data.error}`;
+    } else {
+      output.innerHTML = `Result: ${e.data.result}`;
+    }
+    worker.terminate();
+  };
+  worker.postMessage(code);
 });
 
 document.getElementById('share-btn').addEventListener('click', async () => {
@@ -702,12 +929,16 @@ document.getElementById('file-input').addEventListener('change', async e => {
       functionality: 'Custom tasks',
       success: 99,
       input: text,
-      code: '// Parsed blueprint'
+      code: '// Parsed blueprint',
+      creator: localStorage.getItem('currentUser')
     };
     operations.push(bot);
   }
   await IDB.batchSet('bots', operations);
-  operations.forEach(bot => TrackingBot.log(bot.id, 'upload', 'success', `Uploaded ${bot.name}`));
+  operations.forEach(bot => {
+    TrackingBot.log(bot.id, 'upload', 'success', `Uploaded ${bot.name}`);
+    db.ref('bots/' + bot.id).set(bot);
+  });
   showToast(`Uploaded ${operations.length} blueprints`, 'success');
   updateUserPoints(operations.length * 10);
   loadCreatorsHub();
@@ -745,28 +976,57 @@ document.getElementById('language-select').addEventListener('change', e => {
   location.reload();
 });
 
-(async () => {
+document.getElementById('theme-image').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      document.body.style.background = `url(${e.target.result}) no-repeat center/cover`;
+      showToast('Theme updated with custom image', 'success');
+    };
+    reader.readAsDataURL(file);
+  }
+});
+
+async function loadAssets() {
   const progress = document.getElementById('progress');
   const message = document.getElementById('loading-message');
+  const error = document.getElementById('loading-error');
+  const retryBtn = document.getElementById('retry-btn');
   const assets = ['app.js', 'styles.css', 'service-worker.js', 'smart-ai.js', 'editor.js', 'simplified-ui.js', 'icon.png'];
   let loaded = 0;
 
   for (const asset of assets) {
-    try {
-      await fetch(asset);
-      loaded++;
-      progress.style.width = `${(loaded / assets.length) * 100}%`;
-      message.textContent = `Loaded ${asset}`;
-    } catch (error) {
-      message.textContent = `Error loading ${asset}`;
-      document.getElementById('retry-btn').classList.remove('hidden');
-      return;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        message.textContent = `Loading ${asset} (Attempt ${attempt + 1}/3)...`;
+        const res = await fetch(asset, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        loaded++;
+        progress.style.width = `${(loaded / assets.length) * 100}%`;
+        break;
+      } catch (err) {
+        error.textContent = `Failed to load ${asset}: ${err.message}`;
+        error.classList.remove('hidden');
+        if (attempt === 2) {
+          retryBtn.classList.remove('hidden');
+          return false;
+        }
+        await new Promise(r => setTimeout(r, 1000));
+      }
     }
   }
+  return true;
+}
+
+(async () => {
+  const success = await loadAssets();
+  if (!success) return;
 
   document.getElementById('loading').classList.add('hidden');
   document.getElementById('login-modal').classList.remove('hidden');
   setupTabs();
+  setupNotifications();
   await loadDashboard();
 
   const demoBot = {
@@ -784,7 +1044,11 @@ document.getElementById('language-select').addEventListener('change', e => {
       const url = data.data[0].images.fixed_height.url;
       await IDB.batchSet('cache', [{ key: 'meme-funny', value: url, timestamp: Date.now() }]);
       return url;
-    }`
+    }`,
+    creator: 'demo'
   };
   await IDB.batchSet('bots', [demoBot]);
-})();
+  db.ref('bots/demo-1').set(demoBot);
+
+  const bossUser = { email: 'boss@smarthub.com', username: 'boss', password: 'supersecret123', createdAt: Date.now(), points: 0, role: 'boss' };
+  await IDB.batchSet('
