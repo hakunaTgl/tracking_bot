@@ -1,7 +1,7 @@
-body { margin: 0; font-family: Arial, sans-serif; background: #1A1A2E; color: #F5F6F5; }
+body { margin: 0; font-family: Arial, sans-serif; background: #1A1A2E; color: #F5F6F5; transition: background 0.5s; }
 .modal { display: flex; justify-content: center; align-items: center; height: 100vh; }
 .glassmorphic { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); border-radius: 10px; padding: 20px; }
-.btn { padding: 15px; border: none; border-radius: 5px; cursor: pointer; font-size: 1.2em; }
+.btn { padding: 15px; border: none; border-radius: 5px; cursor: pointer; font-size: 1.2em; touch-action: manipulation; }
 .blue-glow { background: #33B5FF; box-shadow: 0 0 10px #33B5FF; }
 .red-glow { background: #FF3333; box-shadow: 0 0 10px #FF3333; }
 .progress-bar { width: 100%; height: 8px; background: #333; border-radius: 5px; }
@@ -16,6 +16,16 @@ body { margin: 0; font-family: Arial, sans-serif; background: #1A1A2E; color: #F
 .welcome-content { text-align: center; max-width: 80%; animation: fadeIn 1s; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 .dashboard-widget { background: rgba(255, 255, 255, 0.05); padding: 10px; margin: 5px; border-radius: 5px; cursor: pointer; }
-#bot-list { margin-top: 10px; }
-.bot-item { background: rgba(255, 255, 255, 0.1); padding: 10px; margin: 5px 0; border-radius: 5px; }
+.bot-item, .log-item, .collab-item { background: rgba(255, 255, 255, 0.1); padding: 10px; margin: 5px 0; border-radius: 5px; }
 .error { color: #FF3333; }
+.toast { position: fixed; bottom: 20px; left: 20px; padding: 10px; border-radius: 5px; color: #fff; }
+.toast.success { background: #33B5FF; }
+.toast.error { background: #FF3333; }
+.builder-canvas { display: flex; gap: 10px; }
+#builder-components { width: 100px; background: rgba(255, 255, 255, 0.05); padding: 10px; border-radius: 5px; }
+#builder-workspace { flex: 1; min-height: 300px; background: rgba(255, 255, 255, 0.05); border-radius: 5px; }
+.component { padding: 5px; margin: 5px 0; background: #33B5FF; border-radius: 3px; cursor: move; }
+.node { padding: 10px; margin: 5px; background: #FF3333; border-radius: 5px; }
+.meme-preview, .image-preview { max-width: 100%; border-radius: 5px; margin-top: 10px; }
+#analytics-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.stat-card { background: rgba(255, 255, 255, 0.05); padding: 10px; border-radius: 5px; }
