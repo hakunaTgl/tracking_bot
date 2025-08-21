@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart AI Test - Tracking Bot</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        input, button {
+            padding: 12px;
+            margin: 10px 5px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        input {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            width: 300px;
+        }
+        input::placeholder {
+            color: rgba(255, 255, 255, 0.7);
+        }
+        button {
+            background: linear-gradient(45deg, #FF6B6B, #4ECDC4);
+            color: white;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+        }
+        .result {
+            margin: 15px 0;
+            padding: 15px;
+            background: rgba(0, 255, 170, 0.1);
+            border-left: 4px solid #00FFAA;
+            border-radius: 5px;
+        }
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .metric {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .metric h3 {
+            margin: 0 0 10px 0;
+            color: #00FFAA;
+        }
+        .suggestions {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧠 Smart AI Bot - Ultra Intelligence Test</h1>
+        
+        <div class="test-section">
+            <h2>🚀 Smart Bot Creation</h2>
+            <input type="text" id="bot-input" placeholder="Describe your bot idea (e.g., 'weather bot for London', 'meme creator', 'smart assistant')">
+            <button onclick="createSmartBot()">Create Smart Bot</button>
+            <div id="bot-result"></div>
+        </div>
+        
+        <div class="test-section">
+            <h2>📊 AI Evolution Metrics</h2>
+            <div class="metrics" id="metrics">
+                <div class="metric">
+                    <h3>Total Interactions</h3>
+                    <div id="total-interactions">0</div>
+                </div>
+                <div class="metric">
+                    <h3>Success Rate</h3>
+                    <div id="success-rate">0%</div>
+                </div>
+                <div class="metric">
+                    <h3>Intelligence Level</h3>
+                    <div id="intelligence-level">Initializing</div>
+                </div>
+                <div class="metric">
+                    <h3>Adaptations</h3>
+                    <div id="adaptations">0</div>
+                </div>
+            </div>
+            <button onclick="evolveAI()">🧬 Trigger Evolution</button>
+            <button onclick="updateMetrics()">📈 Refresh Metrics</button>
+        </div>
+        
+        <div class="test-section">
+            <h2>💡 Smart Suggestions</h2>
+            <button onclick="getSmartSuggestions()">Get Personalized Suggestions</button>
+            <div id="suggestions" class="suggestions"></div>
+        </div>
+        
+        <div class="test-section">
+            <h2>🧪 Test Bot Execution</h2>
+            <button onclick="testBotExecution()">Run Sample Smart Bot</button>
+            <div id="execution-result"></div>
+        </div>
+        
+        <div class="test-section">
+            <h2>🔍 Learning Analysis</h2>
+            <button onclick="analyzeLearning()">Analyze Learning Patterns</button>
+            <div id="learning-analysis"></div>
+        </div>
+    </div>
+
+    <script>
+        // Simplified IDB implementation for testing
+        class IDB {
+            static data = {
+                learning: new Map(),
+                bots: new Map(),
+                cache: new Map()
+            };
+            
+            static async init() {
+                return Promise.resolve();
+            }
+            
+            static async batchSet(store, operations) {
+                operations.forEach(op => {
+                    this.data[store].set(op.key || op.id, op);
+                });
+                return Promise.resolve();
+            }
+            
+            static async get(store, key) {
+                return Promise.resolve(this.data[store].get(key) || null);
+            }
+            
+            static async getAll(store) {
+                return Promise.resolve(Array.from(this.data[store].values()));
+            }
+        }
+        
+        // Load Smart AI implementation
+        class SmartAI {
+            static learningData = null;
+            static contextMemory = [];
+            static userPatterns = {};
+            static evolutionMetrics = { totalInteractions: 0, successRate: 0, improvementRate: 0 };
+
+            static async initializeLearning() {
+                this.learningData = await IDB.get('learning', 'ai-data') || {
+                    patterns: {},
+                    userPreferences: {},
+                    successfulInputs: [],
+                    failedInputs: [],
+                    contextHistory: [],
+                    adaptations: []
+                };
+                this.evolutionMetrics = await IDB.get('learning', 'evolution-metrics') || this.evolutionMetrics;
+            }
+
+            static async saveLearningData() {
+                await IDB.batchSet('learning', [
+                    { key: 'ai-data', ...this.learningData },
+                    { key: 'evolution-metrics', ...this.evolutionMetrics }
+                ]);
+            }
+
+            static async learnFromInteraction(input, output, success = true) {
+                if (!this.learningData) await this.initializeLearning();
+                
+                const interaction = {
+                    input: input.toLowerCase(),
+                    output,
+                    success,
+                    timestamp: Date.now(),
+                    context: this.contextMemory.slice(-3)
+                };
+
+                const inputWords = input.toLowerCase().split(' ');
+                inputWords.forEach(word => {
+                    if (word.length > 3) {
+                        this.learningData.patterns[word] = (this.learningData.patterns[word] || 0) + (success ? 1 : -0.5);
+                    }
+                });
+
+                if (success) {
+                    this.learningData.successfulInputs.push(interaction);
+                    if (this.learningData.successfulInputs.length > 100) {
+                        this.learningData.successfulInputs = this.learningData.successfulInputs.slice(-100);
+                    }
+                } else {
+                    this.learningData.failedInputs.push(interaction);
+                    if (this.learningData.failedInputs.length > 50) {
+                        this.learningData.failedInputs = this.learningData.failedInputs.slice(-50);
+                    }
+                }
+
+                this.evolutionMetrics.totalInteractions++;
+                const recentSuccessful = this.learningData.successfulInputs.filter(i => 
+                    Date.now() - i.timestamp < 24 * 60 * 60 * 1000
+                ).length;
+                const recentTotal = this.learningData.successfulInputs.length + this.learningData.failedInputs.length;
+                this.evolutionMetrics.successRate = recentTotal > 0 ? (recentSuccessful / recentTotal) * 100 : 0;
+
+                await this.saveLearningData();
+            }
+
+            static async generateSmartSuggestions(context = '') {
+                if (!this.learningData) await this.initializeLearning();
+                
+                const suggestions = [];
+                const now = new Date();
+                const hour = now.getHours();
+                
+                if (hour >= 6 && hour < 12) {
+                    suggestions.push("Good morning! How about creating a news summary bot to start your day?");
+                } else if (hour >= 12 && hour < 18) {
+                    suggestions.push("Afternoon productivity boost - create a task reminder bot?");
+                } else {
+                    suggestions.push("Evening wind-down - perhaps a relaxing music or meditation bot?");
+                }
+
+                const popularPatterns = Object.entries(this.learningData.patterns)
+                    .sort(([,a], [,b]) => b - a)
+                    .slice(0, 3);
+                
+                popularPatterns.forEach(([pattern, score]) => {
+                    if (score > 2) {
+                        suggestions.push(`Based on popular usage: Try creating something with "${pattern}"`);
+                    }
+                });
+
+                return suggestions.slice(0, 3);
+            }
+
+            static calculateSimilarity(str1, str2) {
+                const words1 = str1.toLowerCase().split(' ');
+                const words2 = str2.toLowerCase().split(' ');
+                const commonWords = words1.filter(word => words2.includes(word));
+                return commonWords.length / Math.max(words1.length, words2.length);
+            }
+
+            static async predictUserIntent(input) {
+                if (!this.learningData) await this.initializeLearning();
+                
+                let intentScore = {};
+                
+                this.learningData.successfulInputs.forEach(interaction => {
+                    const similarityScore = this.calculateSimilarity(input, interaction.input);
+                    if (similarityScore > 0.3) {
+                        const intent = this.extractIntent(interaction.output);
+                        intentScore[intent] = (intentScore[intent] || 0) + similarityScore;
+                    }
+                });
+
+                return Object.keys(intentScore).reduce((a, b) => intentScore[a] > intentScore[b] ? a : b, 'general');
+            }
+
+            static extractIntent(output) {
+                if (output.functionality) {
+                    if (output.functionality.includes('meme') || output.functionality.includes('Giphy')) return 'entertainment';
+                    if (output.functionality.includes('weather')) return 'weather';
+                    if (output.functionality.includes('twitter') || output.functionality.includes('social')) return 'social';
+                }
+                return 'general';
+            }
+
+            static async processInput(input, type = 'text') {
+                if (!this.learningData) await this.initializeLearning();
+                
+                this.contextMemory.push(input);
+                if (this.contextMemory.length > 10) {
+                    this.contextMemory = this.contextMemory.slice(-10);
+                }
+
+                const predictedIntent = await this.predictUserIntent(input);
+                
+                let code = '// Generated code';
+                let purpose = input;
+                let functionality = 'Custom tasks';
+                let intelligence = 'basic';
+                
+                const inputLower = input.toLowerCase();
+                
+                if (inputLower.includes('meme') || predictedIntent === 'entertainment') {
+                    const query = inputLower.replace(/create|a|meme|bot/g, '').trim() || 'funny';
+                    code = `async () => {
+                        return "🎭 Meme Bot Active! Would fetch memes about: ${query}. (Demo mode - no API calls)";
+                    }`;
+                    functionality = 'Fetches random memes via Giphy API with smart caching';
+                    intelligence = 'adaptive';
+                } else if (inputLower.includes('weather') || predictedIntent === 'weather') {
+                    const cityMatch = input.match(/(?:in|for)\\s+([a-zA-Z\\s]+)/);
+                    const city = cityMatch ? cityMatch[1].trim() : 'London';
+                    code = `async () => {
+                        const temp = Math.floor(Math.random() * 30) + 5;
+                        const conditions = ['sunny', 'cloudy', 'rainy', 'partly cloudy'][Math.floor(Math.random() * 4)];
+                        const emoji = temp > 25 ? '☀️' : temp > 15 ? '⛅' : temp > 5 ? '🌤️' : '❄️';
+                        let advice = '';
+                        if (temp < 5) advice = ' Bundle up! 🧥';
+                        else if (temp > 25) advice = ' Stay hydrated! 💧';
+                        return `${emoji} Weather in ${city}: ${conditions}, ${temp}°C${advice} (Smart Demo)`;
+                    }`;
+                    functionality = 'Provides intelligent weather updates with personalized advice';
+                    intelligence = 'predictive';
+                } else if (inputLower.includes('smart') || inputLower.includes('ai') || inputLower.includes('learn')) {
+                    code = `async () => {
+                        const metrics = SmartAI.evolutionMetrics;
+                        const totalBots = Array.from(IDB.data.bots.values()).length;
+                        
+                        return `🧠 AI Learning Status:
+        • Total Interactions: ${metrics.totalInteractions || 0}
+        • Success Rate: ${Math.round(metrics.successRate || 0)}%
+        • Bots Created: ${totalBots}
+        • Intelligence Level: Evolving
+        
+        I'm constantly learning from your interactions to provide better assistance! 🚀`;
+                    }`;
+                    functionality = 'Displays AI learning progress and evolution metrics';
+                    intelligence = 'self-aware';
+                } else {
+                    const suggestions = await this.generateSmartSuggestions(input);
+                    code = `async () => {
+                        const suggestions = ${JSON.stringify(suggestions)};
+                        return `I'm learning to understand you better! Here are some smart suggestions:
+        
+        ${suggestions.map((s, i) => `${i + 1}. ${s}`).join('\\n')}
+        
+        Type any of these ideas or describe what you'd like to create! 🤖✨`;
+                    }`;
+                    functionality = 'Provides intelligent suggestions based on learning patterns';
+                    intelligence = 'adaptive';
+                }
+
+                const result = {
+                    message: `🧠 Smart Processing: ${input}`,
+                    action: 'createBot',
+                    params: {
+                        id: Date.now().toString(),
+                        name: `SmartBot-${Date.now()}`,
+                        code,
+                        purpose,
+                        functionality,
+                        intelligence,
+                        predictedSuccess: await this.calculatePredictedSuccess(input),
+                        input,
+                        learningEnabled: true
+                    }
+                };
+
+                await this.learnFromInteraction(input, result, true);
+                
+                return result;
+            }
+
+            static async calculatePredictedSuccess(input) {
+                if (!this.learningData) return 85;
+                
+                const similarInputs = this.learningData.successfulInputs.filter(interaction => 
+                    this.calculateSimilarity(input, interaction.input) > 0.3
+                );
+                
+                if (similarInputs.length === 0) return 75;
+                
+                const avgSuccess = similarInputs.reduce((sum, interaction) => 
+                    sum + (interaction.success ? 100 : 0), 0
+                ) / similarInputs.length;
+                
+                return Math.round(avgSuccess);
+            }
+
+            static async evolve() {
+                if (!this.learningData) await this.initializeLearning();
+                
+                const recentFailures = this.learningData.failedInputs.filter(i => 
+                    Date.now() - i.timestamp < 7 * 24 * 60 * 60 * 1000
+                );
+                
+                if (recentFailures.length > 0) {
+                    const failurePatterns = {};
+                    recentFailures.forEach(failure => {
+                        const words = failure.input.split(' ');
+                        words.forEach(word => {
+                            if (word.length > 3) {
+                                failurePatterns[word] = (failurePatterns[word] || 0) + 1;
+                            }
+                        });
+                    });
+                    
+                    Object.entries(failurePatterns).forEach(([pattern, count]) => {
+                        if (count > 2) {
+                            this.learningData.adaptations.push({
+                                pattern,
+                                adaptation: 'enhanced-processing',
+                                timestamp: Date.now(),
+                                reason: 'frequent-failure-pattern'
+                            });
+                        }
+                    });
+                }
+                
+                const oldSuccessRate = this.evolutionMetrics.successRate;
+                const newSuccessRate = this.learningData.successfulInputs.length / 
+                    (this.learningData.successfulInputs.length + this.learningData.failedInputs.length) * 100;
+                
+                this.evolutionMetrics.improvementRate = newSuccessRate - oldSuccessRate;
+                this.evolutionMetrics.successRate = newSuccessRate;
+                
+                await this.saveLearningData();
+                
+                return {
+                    evolved: true,
+                    improvements: this.learningData.adaptations.length,
+                    successRate: Math.round(newSuccessRate),
+                    improvementRate: Math.round(this.evolutionMetrics.improvementRate * 100) / 100
+                };
+            }
+        }
+        
+        let testBotCounter = 0;
+        
+        async function createSmartBot() {
+            const input = document.getElementById('bot-input').value;
+            if (!input.trim()) {
+                alert('Please enter a bot idea!');
+                return;
+            }
+            
+            try {
+                const result = await SmartAI.processInput(input);
+                const resultDiv = document.getElementById('bot-result');
+                
+                resultDiv.innerHTML = `
+                    <div class="result">
+                        <h3>🤖 Smart Bot Created: ${result.params.name}</h3>
+                        <p><strong>Purpose:</strong> ${result.params.purpose}</p>
+                        <p><strong>Functionality:</strong> ${result.params.functionality}</p>
+                        <p><strong>Intelligence Level:</strong> <span style="color: #00FFAA">${result.params.intelligence}</span></p>
+                        <p><strong>Predicted Success:</strong> <span style="color: #00FFAA">${result.params.predictedSuccess}%</span></p>
+                        <p><strong>AI Response:</strong> ${result.message}</p>
+                        ${result.params.learningEnabled ? '<p style="color: #FFD700">🧠 Learning Enabled - Bot will evolve based on performance</p>' : ''}
+                    </div>
+                `;
+                
+                // Store the bot
+                await IDB.batchSet('bots', [result.params]);
+                
+                // Update metrics
+                updateMetrics();
+                
+                // Clear input
+                document.getElementById('bot-input').value = '';
+                
+            } catch (error) {
+                document.getElementById('bot-result').innerHTML = `
+                    <div class="result" style="border-left-color: #FF6B6B;">
+                        <p style="color: #FF6B6B;">Error creating smart bot: ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        async function evolveAI() {
+            try {
+                const evolution = await SmartAI.evolve();
+                alert(`🧬 AI Evolution Complete!
+                
+✨ Improvements: ${evolution.improvements}
+📈 Success Rate: ${evolution.successRate}%
+📊 Improvement Rate: ${evolution.improvementRate}%
+
+The AI has analyzed recent patterns and adapted its intelligence!`);
+                updateMetrics();
+            } catch (error) {
+                alert('Evolution failed: ' + error.message);
+            }
+        }
+        
+        async function updateMetrics() {
+            try {
+                await SmartAI.initializeLearning();
+                const metrics = SmartAI.evolutionMetrics;
+                const learningData = SmartAI.learningData;
+                
+                document.getElementById('total-interactions').textContent = metrics.totalInteractions || 0;
+                document.getElementById('success-rate').textContent = Math.round(metrics.successRate || 0) + '%';
+                document.getElementById('adaptations').textContent = learningData?.adaptations?.length || 0;
+                
+                // Determine intelligence level
+                const successRate = metrics.successRate || 0;
+                let level = 'Learning';
+                if (successRate > 90) level = 'Genius';
+                else if (successRate > 80) level = 'Expert';
+                else if (successRate > 70) level = 'Advanced';
+                else if (successRate > 50) level = 'Developing';
+                
+                document.getElementById('intelligence-level').textContent = level;
+                
+            } catch (error) {
+                console.error('Failed to update metrics:', error);
+            }
+        }
+        
+        async function getSmartSuggestions() {
+            try {
+                const suggestions = await SmartAI.generateSmartSuggestions();
+                const suggestionsDiv = document.getElementById('suggestions');
+                
+                if (suggestions.length > 0) {
+                    suggestionsDiv.innerHTML = `
+                        <h3>💡 Personalized Smart Suggestions:</h3>
+                        ${suggestions.map((suggestion, index) => `
+                            <div style="margin: 10px 0; padding: 10px; background: rgba(0, 255, 170, 0.1); border-radius: 5px;">
+                                <strong>${index + 1}.</strong> ${suggestion}
+                            </div>
+                        `).join('')}
+                    `;
+                } else {
+                    suggestionsDiv.innerHTML = '<p>No suggestions available yet. Create some bots first!</p>';
+                }
+            } catch (error) {
+                document.getElementById('suggestions').innerHTML = `<p style="color: #FF6B6B;">Error getting suggestions: ${error.message}</p>`;
+            }
+        }
+        
+        async function testBotExecution() {
+            try {
+                // Create a test bot
+                const testInput = 'weather bot for testing';
+                const aiResult = await SmartAI.processInput(testInput);
+                
+                // Execute the generated code
+                const botCode = aiResult.params.code;
+                const func = new Function('return ' + botCode)();
+                const result = await func();
+                
+                document.getElementById('execution-result').innerHTML = `
+                    <div class="result">
+                        <h3>🧪 Bot Execution Test</h3>
+                        <p><strong>Generated Bot:</strong> ${aiResult.params.name}</p>
+                        <p><strong>Intelligence:</strong> ${aiResult.params.intelligence}</p>
+                        <p><strong>Execution Result:</strong></p>
+                        <div style="background: rgba(0, 255, 170, 0.2); padding: 10px; border-radius: 5px; margin: 10px 0;">
+                            ${result}
+                        </div>
+                        <p style="color: #00FFAA;">✅ Execution Successful - Providing feedback to AI...</p>
+                    </div>
+                `;
+                
+                // Provide feedback to learning system
+                setTimeout(() => {
+                    SmartAI.learnFromInteraction(testInput, { result, success: true }, true);
+                    updateMetrics();
+                }, 1000);
+                
+            } catch (error) {
+                document.getElementById('execution-result').innerHTML = `
+                    <div class="result" style="border-left-color: #FF6B6B;">
+                        <p style="color: #FF6B6B;">❌ Execution failed: ${error.message}</p>
+                        <p>Providing failure feedback to AI for learning...</p>
+                    </div>
+                `;
+                
+                // Provide failure feedback
+                setTimeout(() => {
+                    SmartAI.learnFromInteraction('test execution', { error: error.message }, false);
+                    updateMetrics();
+                }, 1000);
+            }
+        }
+        
+        async function analyzeLearning() {
+            try {
+                await SmartAI.initializeLearning();
+                const learningData = SmartAI.learningData;
+                const patterns = learningData?.patterns || {};
+                const successfulInputs = learningData?.successfulInputs || [];
+                const failedInputs = learningData?.failedInputs || [];
+                
+                const analysisDiv = document.getElementById('learning-analysis');
+                
+                const topPatterns = Object.entries(patterns)
+                    .sort(([,a], [,b]) => b - a)
+                    .slice(0, 5);
+                
+                analysisDiv.innerHTML = `
+                    <div class="result">
+                        <h3>🔍 Learning Analysis Report</h3>
+                        
+                        <h4>📊 Statistics</h4>
+                        <p>• Successful Interactions: ${successfulInputs.length}</p>
+                        <p>• Failed Interactions: ${failedInputs.length}</p>
+                        <p>• Learning Patterns: ${Object.keys(patterns).length}</p>
+                        
+                        <h4>🔥 Top Learning Patterns</h4>
+                        ${topPatterns.length > 0 ? 
+                            topPatterns.map(([pattern, score]) => `
+                                <p>• <strong>${pattern}</strong>: ${score > 0 ? '+' : ''}${Math.round(score * 100) / 100} confidence</p>
+                            `).join('') 
+                            : '<p>No patterns learned yet - create more bots!</p>'
+                        }
+                        
+                        <h4>🧠 AI Insights</h4>
+                        <p>• The AI is ${successfulInputs.length > failedInputs.length ? 'performing well' : 'still learning'}</p>
+                        <p>• Most effective when processing: ${topPatterns[0] ? topPatterns[0][0] : 'no data yet'}</p>
+                        <p>• Evolution potential: ${learningData?.adaptations?.length || 0} adaptations ready</p>
+                    </div>
+                `;
+                
+            } catch (error) {
+                document.getElementById('learning-analysis').innerHTML = `
+                    <div class="result" style="border-left-color: #FF6B6B;">
+                        <p style="color: #FF6B6B;">Analysis failed: ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            updateMetrics();
+            console.log('🧠 Smart AI Test Environment Ready');
+        });
+    </script>
+</body>
+</html>

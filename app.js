@@ -12,10 +12,50 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
+// Initialize Smart AI Learning System
+(async () => {
+  try {
+    await SmartAI.initializeLearning();
+    console.log('🧠 Smart AI Learning System initialized');
+    
+    // Start periodic evolution (every 30 minutes)
+    setInterval(async () => {
+      try {
+        const evolution = await SmartAI.evolve();
+        if (evolution.evolved) {
+          console.log('🚀 AI Evolution:', evolution);
+          if (typeof showToast === 'function') {
+            showToast(`🧠 AI Evolved! Success rate: ${evolution.successRate}%, Improvements: ${evolution.improvements}`, 'info');
+          }
+        }
+      } catch (error) {
+        console.warn('Evolution update failed:', error);
+      }
+    }, 30 * 60 * 1000); // 30 minutes
+    
+    // Proactive assistance every 10 minutes
+    setInterval(async () => {
+      try {
+        const suggestions = await SmartAI.generateSmartSuggestions();
+        if (suggestions.length > 0 && Math.random() > 0.7) { // 30% chance to show proactive suggestion
+          if (typeof showToast === 'function') {
+            showToast(`💡 Smart Suggestion: ${suggestions[0]}`, 'info');
+          }
+        }
+      } catch (error) {
+        console.warn('Proactive assistance failed:', error);
+      }
+    }, 10 * 60 * 1000); // 10 minutes
+    
+  } catch (error) {
+    console.warn('Smart AI initialization failed:', error);
+  }
+})();
+
 class IDB {
   static async init() {
     return await new Promise((resolve, reject) => {
-      const req = indexedDB.open('SmartHubDB', 11);
+      const req = indexedDB.open('SmartHubDB', 12);
       req.onupgradeneeded = e => {
         const db = e.target.result;
         if (!db.objectStoreNames.contains('bots')) db.createObjectStore('bots', { keyPath: 'id' });
@@ -26,6 +66,8 @@ class IDB {
         if (!db.objectStoreNames.contains('collab')) db.createObjectStore('collab', { keyPath: 'id' });
         if (!db.objectStoreNames.contains('analytics')) db.createObjectStore('analytics', { keyPath: 'id' });
         if (!db.objectStoreNames.contains('chat')) db.createObjectStore('chat', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('learning')) db.createObjectStore('learning', { keyPath: 'key' });
+        if (!db.objectStoreNames.contains('cache')) db.createObjectStore('cache', { keyPath: 'key' });
       };
       req.onsuccess = e => resolve(e.target.result);
       req.onerror = e => reject(new Error(`IndexedDB error: ${e.target.error.message}`));
@@ -248,6 +290,7 @@ function showToast(message) {
 async function loadDashboard() {
   const bots = await IDB.getAll('bots');
   document.getElementById('bot-status').textContent = `${bots.length} active`;
+  
   try {
     const res = await fetch('https://api.openweathermap.org/data/2.5/weather?q=London&appid=4fc179285e1139b621267e810bb9ddcd');
     const data = await res.json();
@@ -256,7 +299,43 @@ async function loadDashboard() {
   } catch {
     document.getElementById('weather').textContent = 'Weather unavailable';
   }
-  document.getElementById('ai-insights').textContent = 'Optimize bot runtime with caching.';
+  
+  // Enhanced AI Insights with Smart AI metrics
+  try {
+    await SmartAI.initializeLearning();
+    const evolution = await SmartAI.evolve();
+    const aiInsights = [];
+    
+    if (evolution.successRate > 85) {
+      aiInsights.push('🧠 AI Performance: Excellent');
+    } else if (evolution.successRate > 70) {
+      aiInsights.push('🧠 AI Performance: Good, evolving');
+    } else {
+      aiInsights.push('🧠 AI Performance: Learning from interactions');
+    }
+    
+    if (evolution.improvements > 0) {
+      aiInsights.push(`✨ Recent Improvements: ${evolution.improvements}`);
+    }
+    
+    const aiGeneratedBots = bots.filter(bot => bot.aiGenerated).length;
+    if (aiGeneratedBots > 0) {
+      aiInsights.push(`🤖 AI-Generated Bots: ${aiGeneratedBots}/${bots.length}`);
+    }
+    
+    // Smart suggestions based on time and context
+    const suggestions = await SmartAI.generateSmartSuggestions();
+    if (suggestions.length > 0) {
+      aiInsights.push(`💡 Smart Tip: ${suggestions[0]}`);
+    }
+    
+    document.getElementById('ai-insights').innerHTML = aiInsights.join('<br>') || '🧠 Smart AI is learning your patterns...';
+    
+  } catch (error) {
+    console.warn('AI insights update failed:', error);
+    document.getElementById('ai-insights').textContent = '🧠 Smart AI is initializing...';
+  }
+  
   document.querySelectorAll('.dashboard-widget').forEach(widget => {
     widget.addEventListener('click', () => {
       const action = widget.dataset.action;
@@ -293,24 +372,57 @@ async function loadBotsPage() {
   bots.forEach(bot => {
     const item = document.createElement('div');
     item.className = 'bot-item';
+    const intelligenceIcon = bot.aiGenerated ? '🧠' : '🤖';
+    const intelligenceLevel = bot.intelligence || 'basic';
+    const intelligenceColor = {
+      'basic': '#888888',
+      'adaptive': '#33B5FF',
+      'contextual': '#D4A5FF',
+      'predictive': '#00FFAA',
+      'self-aware': '#FF6F61'
+    }[intelligenceLevel] || '#888888';
+    
     item.innerHTML = `
-      <h3>${bot.name}</h3>
+      <h3>${intelligenceIcon} ${bot.name}</h3>
       <p><b>Purpose:</b> ${bot.purpose}</p>
       <p><b>Creator:</b> ${bot.creator}</p>
-      <p><b>Predicted Success:</b> <span style="color: ${bot.predictedSuccess > 75 ? '#00FFAA' : '#FF3333'}">${bot.predictedSuccess || 99}%</span></p>
+      <p><b>Intelligence:</b> <span style="color: ${intelligenceColor}">${intelligenceLevel}</span></p>
+      <p><b>Predicted Success:</b> <span style="color: ${(bot.predictedSuccess || bot.success || 99) > 75 ? '#00FFAA' : '#FF3333'}">${bot.predictedSuccess || bot.success || 99}%</span></p>
+      ${bot.aiGenerated ? '<p><b>🧠 AI-Generated:</b> <span style="color: #00FFAA">Smart Bot</span></p>' : ''}
       <button class="btn blue-glow run-bot">Run</button>
       <button class="btn green-glow edit-bot">Edit</button>
       <button class="btn orange-glow publish-bot">Publish to Marketplace</button>
     `;
     botList.appendChild(item);
     item.querySelector('.run-bot').addEventListener('click', async () => {
-      const func = new Function('return ' + bot.code)();
-      const result = await func();
-      showToast(`Result: ${result}`);
-      localStorage.setItem('editingBot', JSON.stringify(bot));
-      closeAllModals();
-      document.getElementById('playground-modal').classList.remove('hidden');
-      loadPlayground();
+      try {
+        const func = new Function('return ' + bot.code)();
+        const result = await func();
+        showToast(`✅ Success: ${result}`);
+        
+        // Provide success feedback to Smart AI if it was AI-generated
+        if (bot.aiGenerated && bot.input) {
+          setTimeout(async () => {
+            await SmartAI.learnFromInteraction(bot.input, { result, success: true }, true);
+          }, 500);
+        }
+        
+        localStorage.setItem('editingBot', JSON.stringify(bot));
+        closeAllModals();
+        document.getElementById('playground-modal').classList.remove('hidden');
+        loadPlayground();
+      } catch (error) {
+        showToast(`❌ Execution Error: ${error.message}`, 'warning');
+        
+        // Provide failure feedback to Smart AI if it was AI-generated
+        if (bot.aiGenerated && bot.input) {
+          setTimeout(async () => {
+            await SmartAI.learnFromInteraction(bot.input, { error: error.message, success: false }, false);
+          }, 500);
+        }
+        
+        console.error('Bot execution failed:', error);
+      }
     });
     item.querySelector('.edit-bot').addEventListener('click', () => {
       localStorage.setItem('editingBot', JSON.stringify(bot));
@@ -353,17 +465,128 @@ async function loadBotsPage() {
   });
 
   document.getElementById('voice-input-btn').addEventListener('click', () => {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      showToast('Speech recognition not supported in this browser', 'warning');
+      return;
+    }
+    
     const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+    
+    showToast('🎤 Listening... Speak your bot idea!', 'info');
+    
     recognition.onresult = async e => {
       const idea = e.results[0][0].transcript;
+      showToast(`🎤 Heard: "${idea}" - Processing with Smart AI...`, 'info');
+      
+      try {
+        const aiResult = await SmartAI.processInput(idea, 'voice');
+        
+        const bot = {
+          ...aiResult.params,
+          creator: localStorage.getItem('currentUser'),
+          createdAt: Date.now(),
+          aiGenerated: true,
+          voiceInput: true
+        };
+        
+        await IDB.batchSet('bots', [bot]);
+        db.ref('bots/' + bot.id).set(bot);
+        showToast(`🗣️ Voice-Generated Smart Bot: ${bot.name} (Intelligence: ${bot.intelligence || 'adaptive'})`);
+        
+        // Provide feedback to learning system
+        setTimeout(async () => {
+          await SmartAI.learnFromInteraction(idea, aiResult, true);
+        }, 1000);
+        
+        updateUserPoints(35); // Extra points for voice + AI
+        checkBadges();
+        loadBotsPage();
+        
+      } catch (error) {
+        console.error('Smart AI voice processing failed:', error);
+        showToast('Smart AI processing failed, creating basic voice bot...', 'warning');
+        
+        // Fallback to basic voice bot
+        const bot = {
+          id: Date.now().toString(),
+          name: `VoiceBot-${Date.now()}`,
+          purpose: idea,
+          functionality: 'Voice-created bot',
+          success: 80,
+          input: idea,
+          code: `async () => { return "Voice bot executed: ${idea}"; }`,
+          creator: localStorage.getItem('currentUser')
+        };
+        await IDB.batchSet('bots', [bot]);
+        db.ref('bots/' + bot.id).set(bot);
+        showToast(`Created ${bot.name}`);
+        updateUserPoints(25);
+        checkBadges();
+        loadBotsPage();
+      }
+    };
+    
+    recognition.onerror = e => {
+      showToast(`Speech recognition error: ${e.error}`, 'warning');
+    };
+    
+    recognition.onend = () => {
+      console.log('Speech recognition ended');
+    };
+    
+    recognition.start();
+  });
+
+  document.getElementById('text-input-btn').addEventListener('click', async () => {
+    const idea = document.getElementById('text-input').value;
+    if (!idea.trim()) {
+      showToast('Please enter a bot idea first!', 'warning');
+      return;
+    }
+    
+    try {
+      showToast('🧠 Smart AI processing your idea...', 'info');
+      const aiResult = await SmartAI.processInput(idea, 'text');
+      
+      const bot = {
+        ...aiResult.params,
+        creator: localStorage.getItem('currentUser'),
+        createdAt: Date.now(),
+        aiGenerated: true
+      };
+      
+      await IDB.batchSet('bots', [bot]);
+      db.ref('bots/' + bot.id).set(bot);
+      showToast(`✨ Smart Bot Created: ${bot.name} (Intelligence: ${bot.intelligence || 'adaptive'})`);
+      
+      // Provide feedback to learning system
+      setTimeout(async () => {
+        await SmartAI.learnFromInteraction(idea, aiResult, true);
+      }, 1000);
+      
+      updateUserPoints(30); // Extra points for AI-generated bots
+      checkBadges();
+      loadBotsPage();
+      
+      // Clear input
+      document.getElementById('text-input').value = '';
+      
+    } catch (error) {
+      console.error('Smart AI processing failed:', error);
+      showToast('Smart AI processing failed, creating basic bot...', 'warning');
+      
+      // Fallback to basic bot creation
       const bot = {
         id: Date.now().toString(),
-        name: `VoiceBot-${Date.now()}`,
+        name: `TextBot-${Date.now()}`,
         purpose: idea,
-        functionality: 'Voice-created bot',
-        success: 99,
+        functionality: 'Text-created bot',
+        success: 75,
         input: idea,
-        code: `async () => { return "Voice bot executed: ${idea}"; }`,
+        code: `async () => { return "Text bot executed: ${idea}"; }`,
         creator: localStorage.getItem('currentUser')
       };
       await IDB.batchSet('bots', [bot]);
@@ -372,28 +595,7 @@ async function loadBotsPage() {
       updateUserPoints(20);
       checkBadges();
       loadBotsPage();
-    };
-    recognition.start();
-  });
-
-  document.getElementById('text-input-btn').addEventListener('click', async () => {
-    const idea = document.getElementById('text-input').value;
-    const bot = {
-      id: Date.now().toString(),
-      name: `TextBot-${Date.now()}`,
-      purpose: idea,
-      functionality: 'Text-created bot',
-      success: 99,
-      input: idea,
-      code: `async () => { return "Text bot executed: ${idea}"; }`,
-      creator: localStorage.getItem('currentUser')
-    };
-    await IDB.batchSet('bots', [bot]);
-    db.ref('bots/' + bot.id).set(bot);
-    showToast(`Created ${bot.name}`);
-    updateUserPoints(20);
-    checkBadges();
-    loadBotsPage();
+    }
   });
 
   document.getElementById('fusion-btn').addEventListener('click', async () => {
