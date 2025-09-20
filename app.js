@@ -649,13 +649,163 @@ async function loadAIWorkshop() {
 
   document.getElementById('debug-code').addEventListener('click', async () => {
     const code = document.getElementById('workshop-code').value;
+    const purpose = document.getElementById('workshop-purpose')?.value || 'General bot functionality';
+    
+    suggestions.innerHTML = '<div style="color: #33B5FF;">🔍 Running deep code analysis...</div>';
+    
     try {
-      new Function(code);
-      suggestions.innerHTML = '<p style="color: #00FFAA;">Code looks good! Try adding a Giphy API call for memes.</p>';
+      // Enhanced debugging with BotWorker
+      const worker = new BotWorker();
+      const analysis = await worker.enhanceBot(code, purpose);
+      
+      let output = '<div style="margin-bottom: 15px;">';
+      
+      if (analysis.validation.isValid) {
+        output += '<div style="color: #00FFAA;">✅ <strong>Code Analysis: PASSED</strong></div>';
+        output += '<div style="color: #D4A5FF;">🎯 Code is ready for deployment!</div>';
+      } else {
+        output += '<div style="color: #FF3333;">❌ <strong>Code Analysis: ISSUES FOUND</strong></div>';
+        analysis.validation.issues.forEach(issue => {
+          const color = issue.severity === 'critical' ? '#FF3333' : 
+                       issue.severity === 'high' ? '#FF6F61' : 
+                       issue.severity === 'medium' ? '#FFA500' : '#FFFF99';
+          output += `<div style="color: ${color}; margin: 5px 0;">
+            🚨 [${issue.severity.toUpperCase()}] ${issue.message}
+          </div>`;
+        });
+      }
+      
+      output += '</div>';
+      
+      // Show recommendations
+      if (analysis.recommendations.length > 0) {
+        output += '<div style="color: #33B5FF; margin-top: 10px;"><strong>💡 Recommendations:</strong></div>';
+        analysis.recommendations.forEach(rec => {
+          output += `<div style="color: #D4A5FF; margin: 3px 0;">• ${rec}</div>`;
+        });
+      }
+      
+      // Show enhanced code if different
+      if (analysis.enhancedCode !== analysis.originalCode) {
+        output += `
+          <div style="margin-top: 15px;">
+            <div style="color: #00FFAA;"><strong>🔧 Enhanced Code Available:</strong></div>
+            <button onclick="document.getElementById('workshop-code').value = \`${analysis.enhancedCode.replace(/`/g, '\\`')}\`; showToast('Enhanced code applied!')" 
+                    style="background: #33B5FF; color: white; border: none; padding: 5px 10px; border-radius: 5px; margin: 5px 0; cursor: pointer;">
+              Apply Enhanced Code
+            </button>
+          </div>
+        `;
+      }
+      
+      suggestions.innerHTML = output;
+      
     } catch (error) {
-      suggestions.innerHTML = `<p style="color: #FF3333;">Error: ${error.message}</p><p style="color: #D4A5FF;">Suggestion: Check syntax or wrap in try-catch.</p>`;
+      suggestions.innerHTML = `
+        <div style="color: #FF3333;">❌ Analysis Error: ${error.message}</div>
+        <div style="color: #D4A5FF;">💡 Suggestion: Check syntax or verify code structure.</div>
+      `;
     }
   });
+  
+  // Add deep analysis button if not exists
+  const debugBtn = document.getElementById('debug-code');
+  if (debugBtn && !document.getElementById('deep-analysis-btn')) {
+    const deepAnalysisBtn = document.createElement('button');
+    deepAnalysisBtn.id = 'deep-analysis-btn';
+    deepAnalysisBtn.className = 'btn purple-glow';
+    deepAnalysisBtn.textContent = 'Deep Security Analysis';
+    deepAnalysisBtn.style.marginLeft = '10px';
+    
+    deepAnalysisBtn.addEventListener('click', async () => {
+      const code = document.getElementById('workshop-code').value;
+      const purpose = document.getElementById('workshop-purpose')?.value || 'General bot functionality';
+      
+      suggestions.innerHTML = '<div style="color: #33B5FF;">🔒 Running security analysis...</div>';
+      
+      // Run terminal debug agent for comprehensive analysis
+      try {
+        const response = await fetch('/api/debug-analysis', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, purpose })
+        }).catch(() => {
+          // Fallback to client-side analysis
+          return runClientSideAnalysis(code, purpose);
+        });
+        
+        const result = response.json ? await response.json() : response;
+        displaySecurityAnalysis(result);
+        
+      } catch (error) {
+        const fallbackResult = await runClientSideAnalysis(code, purpose);
+        displaySecurityAnalysis(fallbackResult);
+      }
+    });
+    
+    debugBtn.parentNode.insertBefore(deepAnalysisBtn, debugBtn.nextSibling);
+  }
+}
+
+// Client-side security analysis fallback
+async function runClientSideAnalysis(code, purpose) {
+  const issues = [];
+  const suggestions = [];
+  
+  // Security checks
+  const securityPatterns = [
+    { pattern: /eval\s*\(/g, severity: 'critical', msg: 'eval() usage detected - security risk' },
+    { pattern: /innerHTML\s*=/g, severity: 'medium', msg: 'Direct innerHTML assignment detected' },
+    { pattern: /api[_\-]?key\s*[:=]\s*['"]\w+['"]/gi, severity: 'critical', msg: 'Hardcoded API key detected' },
+    { pattern: /document\.write\s*\(/g, severity: 'high', msg: 'document.write() usage detected' }
+  ];
+  
+  securityPatterns.forEach(check => {
+    if (code.match(check.pattern)) {
+      issues.push({ severity: check.severity, message: check.msg });
+    }
+  });
+  
+  // Performance suggestions
+  if (code.includes('fetch(') && !code.includes('catch')) {
+    suggestions.push({ message: 'Add error handling for fetch requests' });
+  }
+  
+  return {
+    isValid: issues.length === 0,
+    issues: issues,
+    suggestions: suggestions,
+    score: Math.max(0, 100 - (issues.length * 20))
+  };
+}
+
+// Display security analysis results
+function displaySecurityAnalysis(result) {
+  const suggestions = document.getElementById('workshop-suggestions');
+  let output = '<div style="border: 1px solid #33B5FF; padding: 15px; border-radius: 10px;">';
+  
+  output += `<div style="color: #33B5FF; font-size: 18px; margin-bottom: 10px;">🔒 Security Analysis Report</div>`;
+  output += `<div style="color: #D4A5FF;">Security Score: ${result.score}/100</div>`;
+  
+  if (result.isValid) {
+    output += '<div style="color: #00FFAA; margin-top: 10px;">✅ No security issues detected!</div>';
+  } else {
+    output += '<div style="color: #FF3333; margin-top: 10px;">⚠️ Security issues found:</div>';
+    result.issues.forEach(issue => {
+      const color = issue.severity === 'critical' ? '#FF3333' : '#FFA500';
+      output += `<div style="color: ${color}; margin: 5px 0;">• ${issue.message}</div>`;
+    });
+  }
+  
+  if (result.suggestions && result.suggestions.length > 0) {
+    output += '<div style="color: #33B5FF; margin-top: 10px;">💡 Suggestions:</div>';
+    result.suggestions.forEach(suggestion => {
+      output += `<div style="color: #D4A5FF; margin: 3px 0;">• ${suggestion.message}</div>`;
+    });
+  }
+  
+  output += '</div>';
+  suggestions.innerHTML = output;
 }
 
 // Editor
@@ -664,41 +814,128 @@ async function loadEditor() {
   const editor = document.getElementById('code-editor');
   editor.value = bot.code || '// Start coding';
   const suggestions = document.getElementById('code-suggestions');
+  
+  // Enhanced real-time code analysis
+  let analysisTimeout;
   editor.addEventListener('input', () => {
     const code = editor.value;
-    if (code.includes('fetch')) {
-      suggestions.innerHTML = '<p style="color: #00FFAA;">Suggestion: Add error handling with try-catch</p>';
-    } else if (code.includes('async')) {
-      suggestions.innerHTML = '<p style="color: #D4A5FF;">Suggestion: Ensure all awaits are inside try-catch blocks</p>';
-    } else {
-      suggestions.innerHTML = '';
-    }
+    
+    // Clear previous timeout
+    clearTimeout(analysisTimeout);
+    
+    // Debounced analysis
+    analysisTimeout = setTimeout(async () => {
+      if (code.trim().length > 10) {
+        await performRealtimeAnalysis(code, suggestions);
+      } else {
+        suggestions.innerHTML = '';
+      }
+    }, 1000);
   });
 
   document.getElementById('run-code').addEventListener('click', async () => {
     const code = editor.value;
+    const purpose = bot.purpose || 'Custom bot functionality';
     const output = document.getElementById('code-output');
-    output.innerHTML = 'Running...';
-    const worker = new Worker(URL.createObjectURL(new Blob([`
-      onmessage = async e => {
-        try {
-          const func = new Function('return ' + e.data)();
-          const result = await func();
-          postMessage({ result });
-        } catch (error) {
-          postMessage({ error: error.message });
+    
+    output.innerHTML = '<div style="color: #33B5FF;">🔍 Validating and running code...</div>';
+    
+    try {
+      // Enhanced execution with validation
+      const worker = new BotWorker();
+      const result = await worker.executeBot(code, null, purpose);
+      
+      if (result.success) {
+        let outputHtml = `<div style="color: #00FFAA;">✅ <strong>Execution Successful</strong></div>`;
+        outputHtml += `<div style="color: #D4A5FF;">Result: ${result.output}</div>`;
+        outputHtml += `<div style="color: #FFFF99;">Execution time: ${result.executionTime}ms</div>`;
+        
+        if (result.warnings && result.warnings.length > 0) {
+          outputHtml += '<div style="color: #FFA500; margin-top: 10px;"><strong>⚠️ Warnings:</strong></div>';
+          result.warnings.forEach(warning => {
+            outputHtml += `<div style="color: #FFA500;">• ${warning}</div>`;
+          });
         }
-      };
-    `], { type: 'application/javascript' })));
-    worker.onmessage = e => {
-      if (e.data.error) {
-        output.innerHTML = `<span style="color: #FF3333;">Error: ${e.data.error}</span>`;
+        
+        output.innerHTML = outputHtml;
+        
+        // Track successful execution
+        await TrackingBot.log(bot.id || 'editor-test', 'execute', 'success', 
+          `Bot executed successfully in ${result.executionTime}ms`);
+        
       } else {
-        output.innerHTML = `<span style="color: #00FFAA;">Result: ${e.data.result}</span>`;
+        output.innerHTML = `
+          <div style="color: #FF3333;">❌ <strong>Execution Failed</strong></div>
+          <div style="color: #FF6F61;">Error: ${result.error}</div>
+          <div style="color: #D4A5FF;">💡 Fix the issues and try again</div>
+        `;
+        
+        // Track failed execution
+        await TrackingBot.log(bot.id || 'editor-test', 'execute', 'failed', result.error);
       }
-      worker.terminate();
-    };
-    worker.postMessage(code);
+      
+    } catch (error) {
+      output.innerHTML = `
+        <div style="color: #FF3333;">❌ Critical Error: ${error.message}</div>
+        <div style="color: #D4A5FF;">💡 Check your code syntax and try again</div>
+      `;
+    }
+  });
+
+  // Add enhanced save functionality
+  const saveBtn = document.getElementById('save-bot') || createSaveButton();
+  saveBtn.addEventListener('click', async () => {
+    const code = editor.value;
+    const purpose = bot.purpose || 'Custom bot functionality';
+    
+    if (!code.trim()) {
+      showToast('Please enter some code before saving', 'error');
+      return;
+    }
+    
+    // Validate before saving
+    const worker = new BotWorker();
+    const analysis = await worker.enhanceBot(code, purpose);
+    
+    if (analysis.validation.isValid) {
+      // Save enhanced version
+      const enhancedBot = {
+        ...bot,
+        code: analysis.enhancedCode,
+        lastModified: Date.now(),
+        validated: true,
+        qualityScore: 95
+      };
+      
+      localStorage.setItem('editingBot', JSON.stringify(enhancedBot));
+      await IDB.batchSet('bots', [enhancedBot]);
+      
+      showToast('Bot saved with enhancements!', 'success');
+      
+      // Show what was enhanced
+      if (analysis.enhancedCode !== code) {
+        const confirmEnhanced = confirm('Code was enhanced with better error handling. Apply enhancements to editor?');
+        if (confirmEnhanced) {
+          editor.value = analysis.enhancedCode;
+        }
+      }
+      
+    } else {
+      const forceSave = confirm(`Code has ${analysis.validation.issues.length} issues. Save anyway?`);
+      if (forceSave) {
+        const unvalidatedBot = {
+          ...bot,
+          code: code,
+          lastModified: Date.now(),
+          validated: false,
+          issues: analysis.validation.issues
+        };
+        
+        localStorage.setItem('editingBot', JSON.stringify(unvalidatedBot));
+        await IDB.batchSet('bots', [unvalidatedBot]);
+        showToast('Bot saved with validation warnings', 'warning');
+      }
+    }
   });
 
   document.getElementById('share-btn').addEventListener('click', async () => {
@@ -711,7 +948,7 @@ async function loadEditor() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           chat_id: chatId,
-          text: `Shared code:\n${code}`
+          text: `Shared code from Smart Hub:\n\`\`\`javascript\n${code}\n\`\`\``
         })
       });
       showToast('Code shared on Telegram');
@@ -729,6 +966,62 @@ async function loadEditor() {
       qrDiv.appendChild(canvas);
     });
   });
+}
+
+// Real-time code analysis helper
+async function performRealtimeAnalysis(code, suggestionsElement) {
+  try {
+    const worker = new BotWorker();
+    const basicAnalysis = await worker.basicValidation(code);
+    
+    let output = '';
+    
+    if (basicAnalysis.isValid) {
+      // Quick suggestions based on code patterns
+      if (code.includes('fetch')) {
+        output += '<div style="color: #00FFAA;">💡 Consider adding error handling with try-catch</div>';
+      }
+      if (code.includes('async') && !code.includes('await')) {
+        output += '<div style="color: #D4A5FF;">💡 Async function without await - consider removing async</div>';
+      }
+      if (code.includes('console.log')) {
+        output += '<div style="color: #FFFF99;">💡 Remember to remove debug logs before production</div>';
+      }
+      if (!code.includes('return')) {
+        output += '<div style="color: #FFA500;">💡 Consider adding a return statement</div>';
+      }
+      
+      if (!output) {
+        output = '<div style="color: #00FFAA;">✅ Code looks good!</div>';
+      }
+    } else {
+      output = '<div style="color: #FF3333;">❌ Syntax errors detected</div>';
+      basicAnalysis.issues.forEach(issue => {
+        output += `<div style="color: #FF6F61;">• ${issue.message}</div>`;
+      });
+    }
+    
+    suggestionsElement.innerHTML = output;
+    
+  } catch (error) {
+    suggestionsElement.innerHTML = '<div style="color: #FFA500;">Analysis temporarily unavailable</div>';
+  }
+}
+
+// Create save button if it doesn't exist
+function createSaveButton() {
+  const saveBtn = document.createElement('button');
+  saveBtn.id = 'save-bot';
+  saveBtn.className = 'btn green-glow';
+  saveBtn.textContent = 'Save Bot';
+  saveBtn.style.margin = '10px';
+  
+  const runBtn = document.getElementById('run-code');
+  if (runBtn && runBtn.parentNode) {
+    runBtn.parentNode.insertBefore(saveBtn, runBtn.nextSibling);
+  }
+  
+  return saveBtn;
 }
 
 // Playground

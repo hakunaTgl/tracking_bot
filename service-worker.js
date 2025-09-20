@@ -1,5 +1,5 @@
-const CACHE_NAME = 'smart-hub-cache-v15';
-const urlsToCache = ['/', '/index.html', '/app.js', '/styles.css', '/smart-ai.js', '/editor.js', '/simplified-ui.js', '/icon.png'];
+const CACHE_NAME = 'smart-hub-cache-v16';
+const urlsToCache = ['/', '/index.html', '/app.js', '/styles.css', '/smart-ai.js', '/editor.js', '/simplified-ui.js', '/bot-worker-enhanced.js', '/debug-agent.js', '/icon.png'];
 
 self.addEventListener('install', event => {
   event.waitUntil(
