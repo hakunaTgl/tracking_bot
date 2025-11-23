@@ -1279,9 +1279,9 @@ async function loadPlayground() {
 }
 
 // Creator’s Hub
-async function loadCreators
-() {
+async function loadCreators() {
   const bots = await IDB.getAll('bots');
+  const logs = await IDB.getAll('tracking');
   const logs = await IDB.getAll('tracking');
   const users = await IDB.getAll('users');
   
