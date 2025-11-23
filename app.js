@@ -1,16 +1,26 @@
-// Firebase Configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyC8qPo1m1Na6u20e3b3Qf8eCfk5EBn15o",
-  authDomain: "smarthubultra.firebaseapp.com",
-  databaseURL: "https://smarthubultra-default-rtdb.firebaseio.com",
-  projectId: "smarthubultra",
-  storageBucket: "smarthubultra.appspot.com",
-  messagingSenderId: "1045339361627",
-  appId: "1:1045339361627:web:6d3a5c7e1e1d2f5a4b3c2d",
-  measurementId: "G-5X7Y2T8Z9Q"
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
+// Firebase Configuration with fallback
+let db = null;
+try {
+  if (typeof firebase !== 'undefined') {
+    const firebaseConfig = {
+      apiKey: "AIzaSyC8qPo1m1Na6u20e3b3Qf8eCfk5EBn15o",
+      authDomain: "smarthubultra.firebaseapp.com",
+      databaseURL: "https://smarthubultra-default-rtdb.firebaseio.com",
+      projectId: "smarthubultra",
+      storageBucket: "smarthubultra.appspot.com",
+      messagingSenderId: "1045339361627",
+      appId: "1:1045339361627:web:6d3a5c7e1e1d2f5a4b3c2d",
+      measurementId: "G-5X7Y2T8Z9Q"
+    };
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.database();
+    console.log('✅ Firebase initialized successfully');
+  } else {
+    console.warn('⚠️ Firebase not available, using local storage only');
+  }
+} catch (error) {
+  console.warn('⚠️ Firebase initialization failed, using local storage only:', error.message);
+}
 
 // Initialize Smart AI Learning System
 (async () => {
@@ -180,14 +190,21 @@ async function signUp(email, username, password, sixDigit, fourDigit) {
     };
     await IDB.batchSet('users', [user]);
     localStorage.setItem('currentUser', email || username);
-    db.ref('users/' + (email || username).replace(/[^a-zA-Z0-9]/g, '')).set(user);
-    showToast('Signed up!');
+    // Sync to Firebase if available
+    if (db) {
+      try {
+        await db.ref('users/' + (email || username).replace(/[^a-zA-Z0-9]/g, '')).set(user);
+      } catch (error) {
+        console.warn('Firebase sync failed, continuing with local storage:', error);
+      }
+    }
+    showToast('✅ Successfully signed up!');
     document.getElementById('login-modal').classList.add('hidden');
     showWelcome();
   } catch (error) {
     document.getElementById('auth-error').textContent = error.message;
     document.getElementById('auth-error').classList.remove('hidden');
-    showToast(`Sign-up failed: ${error.message}`);
+    showToast(`❌ Sign-up failed: ${error.message}`, 'error');
   } finally {
     document.getElementById('login-spinner').classList.add('hidden');
   }
@@ -278,12 +295,20 @@ function showWelcome() {
   });
 }
 
-function showToast(message) {
+function showToast(message, type = 'info') {
   const toast = document.createElement('div');
-  toast.className = 'toast';
-  toast.textContent = message;
+  toast.className = `toast toast-${type}`;
+  toast.innerHTML = message;
   document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 3000);
+  
+  // Animate in
+  setTimeout(() => toast.classList.add('toast-visible'), 10);
+  
+  // Remove after delay
+  setTimeout(() => {
+    toast.classList.remove('toast-visible');
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
 }
 
 // Dashboard
