@@ -25,37 +25,43 @@ try {
 // Initialize Smart AI Learning System
 (async () => {
   try {
-    await SmartAI.initializeLearning();
-    console.log('🧠 Smart AI Learning System initialized');
+    if (typeof SmartAI !== 'undefined') {
+      await SmartAI.initializeLearning();
+      console.log('🧠 Smart AI Learning System initialized');
+    } else {
+      console.warn('⚠️ SmartAI not available, basic functionality only');
+    }
     
-    // Start periodic evolution (every 30 minutes)
-    setInterval(async () => {
-      try {
-        const evolution = await SmartAI.evolve();
-        if (evolution.evolved) {
-          console.log('🚀 AI Evolution:', evolution);
-          if (typeof showToast === 'function') {
-            showToast(`🧠 AI Evolved! Success rate: ${evolution.successRate}%, Improvements: ${evolution.improvements}`, 'info');
+    // Start periodic evolution (every 30 minutes) - only if SmartAI is available
+    if (typeof SmartAI !== 'undefined') {
+      setInterval(async () => {
+        try {
+          const evolution = await SmartAI.evolve();
+          if (evolution.evolved) {
+            console.log('🚀 AI Evolution:', evolution);
+            if (typeof showToast === 'function') {
+              showToast(`🧠 AI Evolved! Success rate: ${evolution.successRate}%, Improvements: ${evolution.improvements}`, 'info');
+            }
           }
+        } catch (error) {
+          console.warn('Evolution update failed:', error);
         }
-      } catch (error) {
-        console.warn('Evolution update failed:', error);
-      }
-    }, 30 * 60 * 1000); // 30 minutes
-    
-    // Proactive assistance every 10 minutes
-    setInterval(async () => {
-      try {
-        const suggestions = await SmartAI.generateSmartSuggestions();
-        if (suggestions.length > 0 && Math.random() > 0.7) { // 30% chance to show proactive suggestion
-          if (typeof showToast === 'function') {
-            showToast(`💡 Smart Suggestion: ${suggestions[0]}`, 'info');
+      }, 30 * 60 * 1000); // 30 minutes
+      
+      // Proactive assistance every 10 minutes
+      setInterval(async () => {
+        try {
+          const suggestions = await SmartAI.generateSmartSuggestions();
+          if (suggestions.length > 0 && Math.random() > 0.7) { // 30% chance to show proactive suggestion
+            if (typeof showToast === 'function') {
+              showToast(`💡 Smart Suggestion: ${suggestions[0]}`, 'info');
+            }
           }
+        } catch (error) {
+          console.warn('Proactive assistance failed:', error);
         }
-      } catch (error) {
-        console.warn('Proactive assistance failed:', error);
-      }
-    }, 10 * 60 * 1000); // 10 minutes
+      }, 10 * 60 * 1000); // 10 minutes
+    }
     
   } catch (error) {
     console.warn('Smart AI initialization failed:', error);
@@ -1274,3 +1280,43 @@ async function loadPlayground() {
 
 // Creator’s Hub
 async function loadCreators
+() {
+  const bots = await IDB.getAll('bots');
+  const logs = await IDB.getAll('tracking');
+  const users = await IDB.getAll('users');
+  
+  // Display bots
+  const botList = document.querySelectorAll('#bot-list')[1];
+  if (botList) {
+    botList.innerHTML = bots.map(bot => `
+      <div class="bot-item glassmorphic">
+        <h3>${bot.name}</h3>
+        <p>${bot.purpose || 'No description'}</p>
+        <button onclick="editBot('${bot.id}')" class="btn blue-glow">Edit</button>
+        <button onclick="deleteBot('${bot.id}')" class="btn red-glow">Delete</button>
+      </div>
+    `).join('');
+  }
+  
+  // Display tracking logs
+  const trackingLogs = document.getElementById('tracking-logs');
+  if (trackingLogs) {
+    trackingLogs.innerHTML = logs.slice(-10).reverse().map(log => `
+      <div style="padding: 10px; margin: 5px 0; background: rgba(255, 255, 255, 0.05); border-radius: 5px;">
+        <span>${new Date(log.timestamp).toLocaleString()}</span>: ${log.action}
+      </div>
+    `).join('') || '<p>No tracking logs yet</p>';
+  }
+  
+  // Display leaderboard
+  const leaderboard = document.getElementById('leaderboard');
+  if (leaderboard) {
+    const sortedUsers = users.sort((a, b) => (b.points || 0) - (a.points || 0)).slice(0, 10);
+    leaderboard.innerHTML = sortedUsers.map((user, index) => `
+      <div style="padding: 10px; margin: 5px 0; background: rgba(255, 255, 255, 0.05); border-radius: 5px;">
+        <span style="font-weight: bold;">#${index + 1}</span>
+        ${user.username || user.email} - ${user.points || 0} points (Level ${user.level || 1})
+      </div>
+    `).join('') || '<p>No users yet</p>';
+  }
+}
