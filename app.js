@@ -1331,11 +1331,22 @@ async function loadCreators() {
   const leaderboard = document.getElementById('leaderboard');
   if (leaderboard) {
     const sortedUsers = users.sort((a, b) => (b.points || 0) - (a.points || 0)).slice(0, 10);
-    leaderboard.innerHTML = sortedUsers.map((user, index) => `
-      <div style="padding: 10px; margin: 5px 0; background: rgba(255, 255, 255, 0.05); border-radius: 5px;">
-        <span style="font-weight: bold;">#${index + 1}</span>
-        ${user.username || user.email} - ${user.points || 0} points (Level ${user.level || 1})
-      </div>
-    `).join('') || '<p>No users yet</p>';
+    leaderboard.innerHTML = '';
+    if (sortedUsers.length === 0) {
+      const p = document.createElement('p');
+      p.textContent = 'No users yet';
+      leaderboard.appendChild(p);
+    } else {
+      sortedUsers.forEach((user, index) => {
+        const div = document.createElement('div');
+        div.style.cssText = 'padding: 10px; margin: 5px 0; background: rgba(255, 255, 255, 0.05); border-radius: 5px;';
+        const rank = document.createElement('span');
+        rank.style.fontWeight = 'bold';
+        rank.textContent = `#${index + 1}`;
+        div.appendChild(rank);
+        div.appendChild(document.createTextNode(` ${user.username || user.email} - ${user.points || 0} points (Level ${user.level || 1})`));
+        leaderboard.appendChild(div);
+      });
+    }
   }
 }
