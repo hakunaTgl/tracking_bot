@@ -1288,14 +1288,33 @@ async function loadCreators() {
   // Display bots
   const botList = document.querySelectorAll('#bot-list')[1];
   if (botList) {
-    botList.innerHTML = bots.map(bot => `
-      <div class="bot-item glassmorphic">
-        <h3>${bot.name}</h3>
-        <p>${bot.purpose || 'No description'}</p>
-        <button onclick="editBot('${bot.id}')" class="btn blue-glow">Edit</button>
-        <button onclick="deleteBot('${bot.id}')" class="btn red-glow">Delete</button>
-      </div>
-    `).join('');
+    botList.innerHTML = '';
+    bots.forEach(bot => {
+      const div = document.createElement('div');
+      div.className = 'bot-item glassmorphic';
+
+      const h3 = document.createElement('h3');
+      h3.textContent = bot.name;
+      div.appendChild(h3);
+
+      const p = document.createElement('p');
+      p.textContent = bot.purpose || 'No description';
+      div.appendChild(p);
+
+      const editBtn = document.createElement('button');
+      editBtn.className = 'btn blue-glow';
+      editBtn.textContent = 'Edit';
+      editBtn.onclick = () => editBot(bot.id);
+      div.appendChild(editBtn);
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'btn red-glow';
+      deleteBtn.textContent = 'Delete';
+      deleteBtn.onclick = () => deleteBot(bot.id);
+      div.appendChild(deleteBtn);
+
+      botList.appendChild(div);
+    });
   }
   
   // Display tracking logs
