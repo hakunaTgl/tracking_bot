@@ -1,51 +1,67 @@
-// Firebase Configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyC8qPo1m1Na6u20e3b3Qf8eCfk5EBn15o",
-  authDomain: "smarthubultra.firebaseapp.com",
-  databaseURL: "https://smarthubultra-default-rtdb.firebaseio.com",
-  projectId: "smarthubultra",
-  storageBucket: "smarthubultra.appspot.com",
-  messagingSenderId: "1045339361627",
-  appId: "1:1045339361627:web:6d3a5c7e1e1d2f5a4b3c2d",
-  measurementId: "G-5X7Y2T8Z9Q"
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
+// Firebase Configuration with fallback
+let db = null;
+try {
+  if (typeof firebase !== 'undefined') {
+    const firebaseConfig = {
+      apiKey: "AIzaSyC8qPo1m1Na6u20e3b3Qf8eCfk5EBn15o",
+      authDomain: "smarthubultra.firebaseapp.com",
+      databaseURL: "https://smarthubultra-default-rtdb.firebaseio.com",
+      projectId: "smarthubultra",
+      storageBucket: "smarthubultra.appspot.com",
+      messagingSenderId: "1045339361627",
+      appId: "1:1045339361627:web:6d3a5c7e1e1d2f5a4b3c2d",
+      measurementId: "G-5X7Y2T8Z9Q"
+    };
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.database();
+    console.log('✅ Firebase initialized successfully');
+  } else {
+    console.warn('⚠️ Firebase not available, using local storage only');
+  }
+} catch (error) {
+  console.warn('⚠️ Firebase initialization failed, using local storage only:', error.message);
+}
 
 // Initialize Smart AI Learning System
 (async () => {
   try {
-    await SmartAI.initializeLearning();
-    console.log('🧠 Smart AI Learning System initialized');
+    if (typeof SmartAI !== 'undefined') {
+      await SmartAI.initializeLearning();
+      console.log('🧠 Smart AI Learning System initialized');
+    } else {
+      console.warn('⚠️ SmartAI not available, basic functionality only');
+    }
     
-    // Start periodic evolution (every 30 minutes)
-    setInterval(async () => {
-      try {
-        const evolution = await SmartAI.evolve();
-        if (evolution.evolved) {
-          console.log('🚀 AI Evolution:', evolution);
-          if (typeof showToast === 'function') {
-            showToast(`🧠 AI Evolved! Success rate: ${evolution.successRate}%, Improvements: ${evolution.improvements}`, 'info');
+    // Start periodic evolution (every 30 minutes) - only if SmartAI is available
+    if (typeof SmartAI !== 'undefined') {
+      setInterval(async () => {
+        try {
+          const evolution = await SmartAI.evolve();
+          if (evolution.evolved) {
+            console.log('🚀 AI Evolution:', evolution);
+            if (typeof showToast === 'function') {
+              showToast(`🧠 AI Evolved! Success rate: ${evolution.successRate}%, Improvements: ${evolution.improvements}`, 'info');
+            }
           }
+        } catch (error) {
+          console.warn('Evolution update failed:', error);
         }
-      } catch (error) {
-        console.warn('Evolution update failed:', error);
-      }
-    }, 30 * 60 * 1000); // 30 minutes
-    
-    // Proactive assistance every 10 minutes
-    setInterval(async () => {
-      try {
-        const suggestions = await SmartAI.generateSmartSuggestions();
-        if (suggestions.length > 0 && Math.random() > 0.7) { // 30% chance to show proactive suggestion
-          if (typeof showToast === 'function') {
-            showToast(`💡 Smart Suggestion: ${suggestions[0]}`, 'info');
+      }, 30 * 60 * 1000); // 30 minutes
+      
+      // Proactive assistance every 10 minutes
+      setInterval(async () => {
+        try {
+          const suggestions = await SmartAI.generateSmartSuggestions();
+          if (suggestions.length > 0 && Math.random() > 0.7) { // 30% chance to show proactive suggestion
+            if (typeof showToast === 'function') {
+              showToast(`💡 Smart Suggestion: ${suggestions[0]}`, 'info');
+            }
           }
+        } catch (error) {
+          console.warn('Proactive assistance failed:', error);
         }
-      } catch (error) {
-        console.warn('Proactive assistance failed:', error);
-      }
-    }, 10 * 60 * 1000); // 10 minutes
+      }, 10 * 60 * 1000); // 10 minutes
+    }
     
   } catch (error) {
     console.warn('Smart AI initialization failed:', error);
@@ -180,14 +196,21 @@ async function signUp(email, username, password, sixDigit, fourDigit) {
     };
     await IDB.batchSet('users', [user]);
     localStorage.setItem('currentUser', email || username);
-    db.ref('users/' + (email || username).replace(/[^a-zA-Z0-9]/g, '')).set(user);
-    showToast('Signed up!');
+    // Sync to Firebase if available
+    if (db) {
+      try {
+        await db.ref('users/' + (email || username).replace(/[^a-zA-Z0-9]/g, '')).set(user);
+      } catch (error) {
+        console.warn('Firebase sync failed, continuing with local storage:', error);
+      }
+    }
+    showToast('✅ Successfully signed up!');
     document.getElementById('login-modal').classList.add('hidden');
     showWelcome();
   } catch (error) {
     document.getElementById('auth-error').textContent = error.message;
     document.getElementById('auth-error').classList.remove('hidden');
-    showToast(`Sign-up failed: ${error.message}`);
+    showToast(`❌ Sign-up failed: ${error.message}`, 'error');
   } finally {
     document.getElementById('login-spinner').classList.add('hidden');
   }
@@ -278,12 +301,20 @@ function showWelcome() {
   });
 }
 
-function showToast(message) {
+function showToast(message, type = 'info') {
   const toast = document.createElement('div');
-  toast.className = 'toast';
+  toast.className = `toast toast-${type}`;
   toast.textContent = message;
   document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 3000);
+  
+  // Animate in
+  setTimeout(() => toast.classList.add('toast-visible'), 10);
+  
+  // Remove after delay
+  setTimeout(() => {
+    toast.classList.remove('toast-visible');
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
 }
 
 // Dashboard
@@ -1248,4 +1279,74 @@ async function loadPlayground() {
 }
 
 // Creator’s Hub
-async function loadCreators
+async function loadCreators() {
+  const bots = await IDB.getAll('bots');
+  const logs = await IDB.getAll('tracking');
+  const logs = await IDB.getAll('tracking');
+  const users = await IDB.getAll('users');
+  
+  // Display bots
+  const botList = document.querySelectorAll('#bot-list')[1];
+  if (botList) {
+    botList.innerHTML = '';
+    bots.forEach(bot => {
+      const div = document.createElement('div');
+      div.className = 'bot-item glassmorphic';
+
+      const h3 = document.createElement('h3');
+      h3.textContent = bot.name;
+      div.appendChild(h3);
+
+      const p = document.createElement('p');
+      p.textContent = bot.purpose || 'No description';
+      div.appendChild(p);
+
+      const editBtn = document.createElement('button');
+      editBtn.className = 'btn blue-glow';
+      editBtn.textContent = 'Edit';
+      editBtn.onclick = () => editBot(bot.id);
+      div.appendChild(editBtn);
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'btn red-glow';
+      deleteBtn.textContent = 'Delete';
+      deleteBtn.onclick = () => deleteBot(bot.id);
+      div.appendChild(deleteBtn);
+
+      botList.appendChild(div);
+    });
+  }
+  
+  // Display tracking logs
+  const trackingLogs = document.getElementById('tracking-logs');
+  if (trackingLogs) {
+    trackingLogs.innerHTML = logs.slice(-10).reverse().map(log => `
+      <div style="padding: 10px; margin: 5px 0; background: rgba(255, 255, 255, 0.05); border-radius: 5px;">
+        <span>${new Date(log.timestamp).toLocaleString()}</span>: ${log.action}
+      </div>
+    `).join('') || '<p>No tracking logs yet</p>';
+  }
+  
+  // Display leaderboard
+  const leaderboard = document.getElementById('leaderboard');
+  if (leaderboard) {
+    const sortedUsers = users.sort((a, b) => (b.points || 0) - (a.points || 0)).slice(0, 10);
+    leaderboard.innerHTML = '';
+    if (sortedUsers.length === 0) {
+      const p = document.createElement('p');
+      p.textContent = 'No users yet';
+      leaderboard.appendChild(p);
+    } else {
+      sortedUsers.forEach((user, index) => {
+        const div = document.createElement('div');
+        div.style.cssText = 'padding: 10px; margin: 5px 0; background: rgba(255, 255, 255, 0.05); border-radius: 5px;';
+        const rank = document.createElement('span');
+        rank.style.fontWeight = 'bold';
+        rank.textContent = `#${index + 1}`;
+        div.appendChild(rank);
+        div.appendChild(document.createTextNode(` ${user.username || user.email} - ${user.points || 0} points (Level ${user.level || 1})`));
+        leaderboard.appendChild(div);
+      });
+    }
+  }
+}

@@ -60,19 +60,24 @@
 
   <!-- Modals -->
   <!-- Login Modal -->
-  <div id="login-modal" class="modal">
+  <div id="login-modal" class="modal" role="dialog" aria-labelledby="login-title">
     <div class="modal-content glassmorphic login-gradient">
-      <h2>Smart Hub Access</h2>
-      <input type="text" id="username" placeholder="Username (optional)">
-      <input type="email" id="email" placeholder="Email (optional)">
-      <input type="password" id="password" placeholder="Password (min 8 chars)" required>
-      <input type="text" id="six-digit" placeholder="6-Digit Code" maxlength="6" required>
-      <input type="text" id="four-digit" placeholder="4-Digit Code" maxlength="4" required>
-      <button id="sign-in-btn" class="btn red-glow">Sign In</button>
-      <button id="sign-up-btn" class="btn blue-glow">Sign Up</button>
-      <button id="forgot-password" class="btn purple-glow">Forgot Password?</button>
-      <p id="auth-error" class="error hidden"></p>
-      <div id="login-spinner" class="hidden">Processing...</div>
+      <h2 id="login-title">🔐 Smart Hub Access</h2>
+      <p class="modal-description">Create an account or sign in to start building amazing bots!</p>
+      <form id="login-form" autocomplete="on">
+        <input type="text" id="username" placeholder="Username (optional)" aria-label="Username" autocomplete="username">
+        <input type="email" id="email" placeholder="Email (optional)" aria-label="Email" autocomplete="email">
+        <input type="password" id="password" placeholder="Password (min 8 chars)" required aria-label="Password" autocomplete="new-password" minlength="8">
+        <input type="text" id="six-digit" placeholder="6-Digit Code" maxlength="6" required aria-label="6-Digit Security Code" pattern="\d{6}" inputmode="numeric">
+        <input type="text" id="four-digit" placeholder="4-Digit Code" maxlength="4" required aria-label="4-Digit Security Code" pattern="\d{4}" inputmode="numeric">
+        <div class="button-group">
+          <button type="button" id="sign-in-btn" class="btn red-glow">Sign In</button>
+          <button type="button" id="sign-up-btn" class="btn blue-glow">Sign Up</button>
+          <button type="button" id="forgot-password" class="btn purple-glow">Forgot Password?</button>
+        </div>
+        <p id="auth-error" class="error hidden" role="alert"></p>
+        <div id="login-spinner" class="hidden" role="status" aria-live="polite">⏳ Processing...</div>
+      </form>
     </div>
   </div>
 
@@ -406,9 +411,13 @@
     </div>
   </div>
 
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.0/build/qrcode.min.js"></script>
+  <!-- External libraries (optional - app works without them) -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-compat-app.js" onerror="console.warn('Firebase not loaded')"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-compat-database.js" onerror="console.warn('Firebase database not loaded')"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.0/build/qrcode.min.js" onerror="console.warn('QR Code library not loaded')"></script>
+  
+  <!-- App scripts -->
+  <script src="smart-ai.js"></script>
   <script src="bot-worker-enhanced.js"></script>
   <script src="app.js"></script>
 </body>
