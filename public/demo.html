@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Tracking Bot Hub</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0c0c14;color:#e8eaf0;font-family:'Segoe UI',sans-serif;height:100vh;display:flex;flex-direction:column}
+.top{background:#13131d;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #1e1e2e}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-i{width:36px;height:36px;background:linear-gradient(135deg,#10b981,#3b82f6);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;box-shadow:0 0 14px #10b98144}
+.logo-t{font-size:1rem;font-weight:700;background:linear-gradient(90deg,#34d399,#60a5fa);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.stats{display:flex;gap:10px;font-size:.7rem}
+.st{background:#1a1a2a;border:1px solid #2a2a3a;border-radius:10px;padding:4px 10px;color:#6b7280}
+.st span{color:#34d399;font-weight:700}
+.layout{display:flex;flex:1;overflow:hidden}
+.sidebar{width:200px;background:#10101a;border-right:1px solid #1e1e2e;padding:12px;overflow-y:auto}
+.sh{font-size:.65rem;color:#6b7280;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;margin-top:10px}
+.si{background:#13131d;border:1px solid #1e1e2e;border-radius:6px;padding:8px 10px;margin-bottom:5px;cursor:pointer;font-size:.76rem;transition:.2s}
+.si:hover,.si.on{background:#1a1a2a;border-color:#34d39933}
+.si-name{font-weight:600;margin-bottom:2px}
+.si-meta{font-size:.65rem;color:#6b7280}
+.main{flex:1;display:flex;flex-direction:column}
+.dash-header{background:#13131d;padding:12px 18px;border-bottom:1px solid #1e1e2e;display:flex;align-items:center;justify-content:space-between}
+.dh-title{font-size:.9rem;font-weight:700}
+.dh-actions{display:flex;gap:8px}
+.btn{background:#1a1a2a;border:1px solid #2a2a3a;border-radius:6px;padding:5px 12px;color:#9ca3af;cursor:pointer;font-size:.72rem}
+.btn.primary{background:linear-gradient(135deg,#10b981,#3b82f6);border:none;color:#fff}
+.content{flex:1;padding:16px;overflow-y:auto}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px}
+.card{background:#13131d;border:1px solid #1e1e2e;border-radius:10px;padding:14px;position:relative}
+.card-label{font-size:.65rem;color:#6b7280;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+.card-val{font-size:1.6rem;font-weight:800;background:linear-gradient(135deg,#34d399,#60a5fa);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.card-sub{font-size:.7rem;color:#6b7280;margin-top:4px}
+.bots-section{margin-bottom:18px}
+.sec-title{font-size:.8rem;font-weight:700;color:#e8eaf0;margin-bottom:10px}
+.bot-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.bot-card{background:#13131d;border:1px solid #1e1e2e;border-radius:8px;padding:12px;display:flex;gap:10px;transition:.2s}
+.bot-card:hover{border-color:#34d399;background:#15151f}
+.bot-icon{width:40px;height:40px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0}
+.bot-info{flex:1}
+.bot-name{font-size:.82rem;font-weight:700;margin-bottom:3px}
+.bot-desc{font-size:.7rem;color:#6b7280;margin-bottom:5px}
+.bot-status{display:inline-block;background:#10b98122;border:1px solid #10b98144;color:#34d399;font-size:.65rem;padding:1px 6px;border-radius:4px}
+.log-section{margin-bottom:12px}
+.log-box{background:#0a0a12;border:1px solid #1e1e2e;border-radius:8px;padding:12px;max-height:180px;overflow-y:auto;font-size:.75rem;line-height:1.8}
+.log-entry{margin-bottom:4px}
+.log-time{color:#6b7280;font-size:.68rem}
+.log-msg{color:#9ca3af}
+.log-msg.ok{color:#34d399}
+.log-msg.err{color:#f87171}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="logo">
+    <div class="logo-i">🤖</div>
+    <div class="logo-t">Tracking Bot Hub</div>
+  </div>
+  <div class="stats">
+    <div class="st">Bots: <span>8</span></div>
+    <div class="st">Tasks: <span>24</span></div>
+    <div class="st">Uptime: <span>99.8%</span></div>
+  </div>
+</div>
+<div class="layout">
+  <div class="sidebar">
+    <div class="sh">Active Bots</div>
+    <div class="si on"><div class="si-name">Weather Tracker</div><div class="si-meta">Live • 12 cities</div></div>
+    <div class="si"><div class="si-name">Package Tracker</div><div class="si-meta">Idle • 4 parcels</div></div>
+    <div class="si"><div class="si-name">Stock Monitor</div><div class="si-meta">Live • 8 tickers</div></div>
+    <div class="si"><div class="si-name">News Scraper</div><div class="si-meta">Live • EV topics</div></div>
+    <div class="sh">Integrations</div>
+    <div class="si"><div class="si-name">✅ Telegram API</div></div>
+    <div class="si"><div class="si-name">✅ OpenWeatherMap</div></div>
+    <div class="si"><div class="si-name">✅ FedEx/UPS APIs</div></div>
+  </div>
+  <div class="main">
+    <div class="dash-header">
+      <div class="dh-title">📊 Dashboard</div>
+      <div class="dh-actions">
+        <button class="btn">⚙️ Settings</button>
+        <button class="btn primary">+ New Bot</button>
+      </div>
+    </div>
+    <div class="content">
+      <div class="grid">
+        <div class="card"><div class="card-label">Active Bots</div><div class="card-val">8</div><div class="card-sub">All systems operational</div></div>
+        <div class="card"><div class="card-label">Tasks Today</div><div class="card-val" id="tasks">24</div><div class="card-sub">+8 from yesterday</div></div>
+        <div class="card"><div class="card-label">Avg Response</div><div class="card-val">1.2s</div><div class="card-sub">Fast & reliable</div></div>
+      </div>
+      <div class="bots-section">
+        <div class="sec-title">🤖 Bot Fleet</div>
+        <div class="bot-grid">
+          <div class="bot-card">
+            <div class="bot-icon" style="background:linear-gradient(135deg,#3b82f6,#8b5cf6)">☀️</div>
+            <div class="bot-info"><div class="bot-name">Weather Tracker</div><div class="bot-desc">Real-time weather for 12 cities</div><span class="bot-status">● RUNNING</span></div>
+          </div>
+          <div class="bot-card">
+            <div class="bot-icon" style="background:linear-gradient(135deg,#10b981,#06b6d4)">📦</div>
+            <div class="bot-info"><div class="bot-name">Package Tracker</div><div class="bot-desc">Monitors 4 parcels via FedEx/UPS APIs</div><span class="bot-status">● IDLE</span></div>
+          </div>
+          <div class="bot-card">
+            <div class="bot-icon" style="background:linear-gradient(135deg,#f59e0b,#ef4444)">📈</div>
+            <div class="bot-info"><div class="bot-name">Stock Monitor</div><div class="bot-desc">Tracks 8 tickers + sends alerts</div><span class="bot-status">● RUNNING</span></div>
+          </div>
+          <div class="bot-card">
+            <div class="bot-icon" style="background:linear-gradient(135deg,#8b5cf6,#ec4899)">📰</div>
+            <div class="bot-info"><div class="bot-name">News Scraper</div><div class="bot-desc">Auto-scrapes EV mobility news</div><span class="bot-status">● RUNNING</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="log-section">
+        <div class="sec-title">📋 Recent Activity</div>
+        <div class="log-box" id="log">
+          <div class="log-entry"><span class="log-time">12:04:32</span> <span class="log-msg ok">[OK] Weather bot pulled 12 forecasts</span></div>
+          <div class="log-entry"><span class="log-time">12:03:18</span> <span class="log-msg">[INFO] Package #4829 shipped from warehouse</span></div>
+          <div class="log-entry"><span class="log-time">12:02:45</span> <span class="log-msg ok">[OK] Stock alert sent: TSLA +3.2%</span></div>
+          <div class="log-entry"><span class="log-time">12:01:59</span> <span class="log-msg">[INFO] News scraper found 8 new articles</span></div>
+          <div class="log-entry"><span class="log-time">12:00:33</span> <span class="log-msg ok">[OK] All bots health check passed</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+setInterval(()=>{
+  const t=document.getElementById('tasks');t.textContent=parseInt(t.textContent)+1;
+  const l=document.getElementById('log');
+  const msgs=['Weather bot pulled 12 forecasts','Package tracker checked 4 shipments','Stock alert triggered: NIU +2.1%','News scraper found 3 EV articles','Bot health check passed'];
+  const e=document.createElement('div');e.className='log-entry';
+  e.innerHTML=`<span class="log-time">${new Date().toLocaleTimeString()}</span> <span class="log-msg ok">[OK] ${msgs[Math.floor(Math.random()*msgs.length)]}</span>`;
+  l.prepend(e);
+  if(l.children.length>8)l.lastChild.remove();
+},4000);
+</script>
+</body>
+</html>
